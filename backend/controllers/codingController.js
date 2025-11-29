@@ -132,7 +132,7 @@ const getCodingQuestion = asyncHandler(async (req, res) => {
 // @access  Private
 const getCodingQuestionsByExamId = asyncHandler(async (req, res) => {
   const { examId } = req.params;
-  console.log("Fetching question for examId:", examId);
+  console.log("Fetching questions for examId:", examId);
 
   if (!examId) {
     res.status(400);
@@ -140,28 +140,77 @@ const getCodingQuestionsByExamId = asyncHandler(async (req, res) => {
   }
 
   try {
-    const question = await CodingQuestion.findOne({
+    const questions = await CodingQuestion.find({
       examId: examId.toString(),
     });
-    console.log("Found question:", question);
-
-    if (!question) {
-      res.status(404);
-      throw new Error(`No coding question found for exam: ${examId}`);
-    }
+    console.log("Found questions:", questions);
 
     res.status(200).json({
       success: true,
-      data: question,
+      count: questions.length,
+      data: questions,
     });
   } catch (error) {
-    console.error("Error fetching coding question:", error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-      details: error.stack,
-    });
+    console.error("Error fetching coding questions:", error);
+    res.status(500);
+    throw new Error("Error fetching coding questions");
   }
+});
+
+// @desc    Update a coding question
+// @route   PUT /api/coding/question/:id
+// @access  Private (teacher)
+const updateCodingQuestion = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { question, description, difficulty, timeLimit, points } = req.body;
+
+  if (!question || !description) {
+    res.status(400);
+    throw new Error("Question and description are required");
+  }
+
+  const existingQuestion = await CodingQuestion.findById(id);
+
+  if (!existingQuestion) {
+    res.status(404);
+    throw new Error("Coding question not found");
+  }
+
+  existingQuestion.question = question;
+  existingQuestion.description = description;
+  existingQuestion.difficulty = difficulty;
+  existingQuestion.timeLimit = timeLimit;
+  existingQuestion.points = points;
+
+  const updatedQuestion = await existingQuestion.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Coding question updated successfully",
+    data: updatedQuestion,
+  });
+});
+
+// @desc    Delete a coding question
+// @route   DELETE /api/coding/question/:id
+// @access  Private (teacher)
+const deleteCodingQuestion = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const question = await CodingQuestion.findById(id);
+
+  if (!question) {
+    res.status(404);
+    throw new Error("Coding question not found");
+  }
+
+  await CodingQuestion.deleteOne({ _id: id });
+
+  res.status(200).json({
+    success: true,
+    message: "Coding question deleted successfully",
+    id: id,
+  });
 });
 
 export {
@@ -170,4 +219,6 @@ export {
   getCodingQuestions,
   getCodingQuestion,
   getCodingQuestionsByExamId,
+  updateCodingQuestion,
+  deleteCodingQuestion,
 };

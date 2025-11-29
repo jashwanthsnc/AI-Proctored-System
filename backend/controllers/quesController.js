@@ -38,4 +38,53 @@ const createQuestion = asyncHandler(async (req, res) => {
   }
 });
 
-export { getQuestionsByExamId, createQuestion };
+// Update a question
+const updateQuestion = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { question, options } = req.body;
+
+  if (!question || !options || options.length === 0) {
+    res.status(400);
+    throw new Error("Question and options are required");
+  }
+
+  const existingQuestion = await Question.findById(id);
+
+  if (!existingQuestion) {
+    res.status(404);
+    throw new Error("Question not found");
+  }
+
+  existingQuestion.question = question;
+  existingQuestion.options = options;
+
+  const updatedQuestion = await existingQuestion.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Question updated successfully",
+    data: updatedQuestion,
+  });
+});
+
+// Delete a question
+const deleteQuestion = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const question = await Question.findById(id);
+
+  if (!question) {
+    res.status(404);
+    throw new Error("Question not found");
+  }
+
+  await Question.deleteOne({ _id: id });
+
+  res.status(200).json({
+    success: true,
+    message: "Question deleted successfully",
+    id: id,
+  });
+});
+
+export { getQuestionsByExamId, createQuestion, updateQuestion, deleteQuestion };

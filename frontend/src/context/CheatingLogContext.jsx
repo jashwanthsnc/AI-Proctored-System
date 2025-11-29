@@ -13,7 +13,11 @@ export const CheatingLogProvider = ({ children }) => {
     examId: '',
     username: userInfo?.name || '',
     email: userInfo?.email || '',
+    screenshots: [], // Initialize screenshots array
   });
+
+  // Track which screenshots have been saved to DB
+  const [savedScreenshotUrls, setSavedScreenshotUrls] = useState(new Set());
 
   useEffect(() => {
     if (userInfo) {
@@ -25,20 +29,41 @@ export const CheatingLogProvider = ({ children }) => {
     }
   }, [userInfo]);
 
-  const updateCheatingLog = (newLog) => {
+  const updateCheatingLog = (newLogOrUpdater) => {
     setCheatingLog((prev) => {
-      // Ensure all count fields are numbers and have default values
+      // Support both direct object and function (like setState)
+      const newLog = typeof newLogOrUpdater === 'function' 
+        ? newLogOrUpdater(prev) 
+        : newLogOrUpdater;
+      
+      // Merge previous and new log, with new log taking priority
       const updatedLog = {
         ...prev,
         ...newLog,
-        noFaceCount: Number(newLog.noFaceCount || prev.noFaceCount || 0),
-        multipleFaceCount: Number(newLog.multipleFaceCount || prev.multipleFaceCount || 0),
-        cellPhoneCount: Number(newLog.cellPhoneCount || prev.cellPhoneCount || 0),
-        prohibitedObjectCount: Number(
-          newLog.prohibitedObjectCount || prev.prohibitedObjectCount || 0,
-        ),
+        // Only update counts if they're explicitly provided in newLog
+        // Use !== undefined to check if the field exists
+        noFaceCount: newLog.noFaceCount !== undefined 
+          ? Number(newLog.noFaceCount) 
+          : Number(prev.noFaceCount || 0),
+        multipleFaceCount: newLog.multipleFaceCount !== undefined
+          ? Number(newLog.multipleFaceCount)
+          : Number(prev.multipleFaceCount || 0),
+        cellPhoneCount: newLog.cellPhoneCount !== undefined
+          ? Number(newLog.cellPhoneCount)
+          : Number(prev.cellPhoneCount || 0),
+        prohibitedObjectCount: newLog.prohibitedObjectCount !== undefined
+          ? Number(newLog.prohibitedObjectCount)
+          : Number(prev.prohibitedObjectCount || 0),
+        // Preserve or update screenshots array
+        screenshots: newLog.screenshots !== undefined
+          ? newLog.screenshots
+          : (prev.screenshots || []),
       };
-      console.log('Updated cheating log:', updatedLog); // Debug log
+      console.log('📝 Context Update:', {
+        before: prev,
+        incoming: newLog,
+        after: updatedLog
+      });
       return updatedLog;
     });
   };
@@ -52,13 +77,44 @@ export const CheatingLogProvider = ({ children }) => {
       examId: examId,
       username: userInfo?.name || '',
       email: userInfo?.email || '',
+      screenshots: [], // Reset screenshots array
     };
     console.log('Reset cheating log:', resetLog); // Debug log
     setCheatingLog(resetLog);
+    setSavedScreenshotUrls(new Set()); // Reset saved screenshot tracking
+  };
+
+  // Mark screenshots as saved (to be called after successful save)
+  const markScreenshotsAsSaved = (screenshots) => {
+    if (screenshots && screenshots.length > 0) {
+      setSavedScreenshotUrls((prev) => {
+        const newSet = new Set(prev);
+        screenshots.forEach((s) => {
+          if (s.url) newSet.add(s.url);
+        });
+        return newSet;
+      });
+    }
+  };
+
+  // Get only unsaved screenshots for auto-save
+  const getUnsavedScreenshots = () => {
+    if (!cheatingLog.screenshots || cheatingLog.screenshots.length === 0) {
+      return [];
+    }
+    return cheatingLog.screenshots.filter((s) => !savedScreenshotUrls.has(s.url));
   };
 
   return (
-    <CheatingLogContext.Provider value={{ cheatingLog, updateCheatingLog, resetCheatingLog }}>
+    <CheatingLogContext.Provider
+      value={{
+        cheatingLog,
+        updateCheatingLog,
+        resetCheatingLog,
+        markScreenshotsAsSaved,
+        getUnsavedScreenshots,
+      }}
+    >
       {children}
     </CheatingLogContext.Provider>
   );

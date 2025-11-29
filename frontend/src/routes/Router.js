@@ -9,7 +9,7 @@ const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
 const ExamLayout = Loadable(lazy(() => import('../layouts/full/ExamLayout')));
 
 /* ****Pages***** */
-// const Dashboard = Loadable(lazy(() => import('../views/dashboard/Dashboard')));
+const Dashboard = Loadable(lazy(() => import('../views/dashboard/Dashboard')));
 const SamplePage = Loadable(lazy(() => import('../views/sample-page/SamplePage')));
 const Success = Loadable(lazy(() => import('../views/Success')));
 
@@ -34,6 +34,11 @@ const UserAccount = Loadable(lazy(() => import('../views/authentication/UserAcco
 const CreateExamPage = Loadable(lazy(() => import('./../views/teacher/CreateExamPage')));
 const ExamLogPage = Loadable(lazy(() => import('./../views/teacher/ExamLogPage')));
 const AddQuestions = Loadable(lazy(() => import('./../views/teacher/AddQuestions')));
+const StudentsPage = Loadable(lazy(() => import('./../views/teacher/StudentsPage')));
+const AllExamsPage = Loadable(lazy(() => import('./../views/teacher/AllExamsPage')));
+const EditExamPage = Loadable(lazy(() => import('./../views/teacher/EditExamPage')));
+const TeacherDashboard = Loadable(lazy(() => import('./../views/teacher/TeacherDashboard')));
+const LiveProctoringPage = Loadable(lazy(() => import('./../views/teacher/LiveProctoringPage')));
 const PrivateRoute = Loadable(lazy(() => import('src/views/authentication/PrivateRoute')));
 const TeacherRoute = Loadable(lazy(() => import('src/views/authentication/TeacherRoute')));
 
@@ -47,15 +52,20 @@ const Router = createBrowserRouter(
         {/* // Main layout */}
         <Route path="/" element={<FullLayout />}>
           <Route index={true} path="/" element={<Navigate to="/dashboard" />} />
-          <Route path="/dashboard" exact={true} element={<ExamPage />} />
+          <Route path="/dashboard" exact={true} element={<Dashboard />} />
           <Route path="/sample-page" exact={true} element={<SamplePage />} />
           <Route path="/Success" exact={true} element={<Success />} />
           <Route path="/exam" exact={true} element={<ExamPage />} />
           <Route path="/result" exact={true} element={<ResultPage />} />
           <Route path="" element={<TeacherRoute />}>
+            <Route path="/teacher-dashboard" exact={true} element={<TeacherDashboard />} />
             <Route path="/create-exam" exact={true} element={<CreateExamPage />} />
             <Route path="/add-questions" exact={true} element={<AddQuestions />} />
             <Route path="/exam-log" exact={true} element={<ExamLogPage />} />
+            <Route path="/live-proctoring" exact={true} element={<LiveProctoringPage />} />
+            <Route path="/students" exact={true} element={<StudentsPage />} />
+            <Route path="/all-exams" exact={true} element={<AllExamsPage />} />
+            <Route path="/edit-exam/:examId" exact={true} element={<EditExamPage />} />
           </Route>
         </Route>
         <Route path="/" element={<ExamLayout />}>

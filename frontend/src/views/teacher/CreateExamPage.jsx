@@ -1,13 +1,13 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { Grid, Box, Card, Typography } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import PageContainer from 'src/components/container/PageContainer';
 import ExamForm from './components/ExamForm';
 import { useFormik } from 'formik';
 import * as yup from 'yup';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 import { useCreateExamMutation } from '../../slices/examApiSlice.js';
-import axiosInstance from '../../axios';
 
 const examValidationSchema = yup.object({
   examName: yup.string().required('Exam Name is required'),
@@ -24,16 +24,16 @@ const examValidationSchema = yup.object({
     .min(1, 'Exam Duration must be at least 1 minute')
     .required('Exam Duration is required'),
   liveDate: yup.date().required('Live Date and Time is required'),
-  deadDate: yup.date().required('Dead Date and Time is required'),
-  codingQuestion: yup.object().shape({
-    question: yup.string().required('Coding Question is required'),
-    description: yup.string().required('Question Description is required'),
-  }),
+  deadDate: yup
+    .date()
+    .required('Dead Date and Time is required')
+    .min(yup.ref('liveDate'), 'Deadline must be after Live Date'),
 });
 
 const CreateExamPage = () => {
   const { userInfo } = useSelector((state) => state.auth);
   const [createExam, { isLoading }] = useCreateExamMutation();
+  const navigate = useNavigate();
 
   const initialExamValues = {
     examName: '',
@@ -41,102 +41,61 @@ const CreateExamPage = () => {
     duration: '',
     liveDate: '',
     deadDate: '',
-    codingQuestion: {
-      question: '',
-      description: '',
-    },
   };
 
-  const handleSubmit = async (values) => {
+  const handleSubmit = useCallback(async (values, { setSubmitting, resetForm }) => {
     try {
-      // First create the exam
       const examResponse = await createExam(values).unwrap();
-      console.log('Exam Response:', examResponse);
+      const examId = examResponse.examId || examResponse._id || examResponse.id;
 
-      if (examResponse) {
-        // Get exam ID from response (handle different possible formats)
-        const examId = examResponse.examId || examResponse._id || examResponse.id;
-
-        if (!examId) {
-          console.error('No exam ID found in response:', examResponse);
-          toast.error('Failed to get exam ID');
-          return;
-        }
-
-        // Then create the coding question
-        const codingQuestionData = {
-          question: values.codingQuestion.question,
-          description: values.codingQuestion.description,
-          examId: examId,
-        };
-
-        console.log('Coding Question Data:', codingQuestionData);
-
-        try {
-          const codingResponse = await axiosInstance.post(
-            '/api/coding/question',
-            codingQuestionData,
-            {
-              withCredentials: true,
-            },
-          );
-          console.log('Coding Response:', codingResponse.data);
-
-          if (codingResponse.data.success) {
-            toast.success('Exam and coding question created successfully');
-            formik.resetForm();
-          } else {
-            console.error('Failed to create coding question:', codingResponse.data);
-            toast.error('Failed to create coding question');
-          }
-        } catch (codingError) {
-          console.error('Coding Question Error:', codingError.response?.data || codingError);
-          toast.error(codingError.response?.data?.message || 'Failed to create coding question');
-        }
+      if (!examId) {
+        toast.error('Failed to get exam ID');
+        setSubmitting(false);
+        return;
       }
+
+      toast.success('🎉 Exam created successfully!');
+      resetForm();
+      
+      // Navigate to All Exams page after successful creation
+      setTimeout(() => {
+        navigate('/all-exams');
+        toast.info('💡 You can now assign students and add questions to the exam');
+      }, 1000);
+      
     } catch (err) {
       console.error('Exam Creation Error:', err);
       toast.error(err?.data?.message || err.error || 'Failed to create exam');
+      setSubmitting(false);
     }
-  };
+  }, [createExam, navigate]);
 
   const formik = useFormik({
     initialValues: initialExamValues,
     validationSchema: examValidationSchema,
     onSubmit: handleSubmit,
+    validateOnChange: true,
+    validateOnBlur: true,
   });
 
   return (
     <PageContainer title="Create Exam" description="Create a new exam">
-      <Box
-        sx={{
-          position: 'relative',
-          '&:before': {
-            content: '""',
-            background: 'radial-gradient(#d2f1df, #d3d7fa, #bad8f4)',
-            backgroundSize: '400% 400%',
-            animation: 'gradient 15s ease infinite',
-            position: 'absolute',
-            height: '100%',
-            width: '100%',
-            opacity: '0.3',
-          },
-        }}
-      >
-        <Grid container spacing={0} justifyContent="center" sx={{ height: '100vh' }}>
+      <Box>
+        <Grid container spacing={0} justifyContent="center" sx={{ py: 3 }}>
           <Grid
             item
             xs={12}
             sm={12}
-            lg={12}
-            xl={6}
+            lg={10}
+            xl={8}
             display="flex"
             justifyContent="center"
             alignItems="center"
           >
-            <Card elevation={9} sx={{ p: 4, zIndex: 1, width: '100%', maxWidth: '800px' }}>
+            <Card elevation={9} sx={{ p: 4, width: '100%', maxWidth: '900px' }}>
               <ExamForm
                 formik={formik}
+                isLoading={isLoading}
                 title={
                   <Typography variant="h3" textAlign="center" color="textPrimary" mb={1}>
                     Create Exam

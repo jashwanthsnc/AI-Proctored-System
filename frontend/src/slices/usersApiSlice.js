@@ -39,11 +39,34 @@ export const userApiSlice = apiSlice.injectEndpoints({
         body: data,
       }),
     }),
+    // Get all students with statistics (Teacher only)
+    getStudents: builder.query({
+      query: () => ({
+        url: `${USERS_URL}/students`,
+        method: 'GET',
+      }),
+      providesTags: ['Students'],
+    }),
+    // Add new student (Teacher only)
+    addStudent: builder.mutation({
+      query: (data) => ({
+        url: `${USERS_URL}/students`,
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Students'],
+    }),
   }),
 });
 
 // it specify convention to export them
 // like for mutation we have to add use + name + Mutation
 // like for query we have to add use + name + query
-export const { useLoginMutation, useLogoutMutation, useRegisterMutation, useUpdateUserMutation } =
-  userApiSlice;
+export const {
+  useLoginMutation,
+  useLogoutMutation,
+  useRegisterMutation,
+  useUpdateUserMutation,
+  useGetStudentsQuery,
+  useAddStudentMutation,
+} = userApiSlice;

@@ -31,10 +31,16 @@ export default function Home({ cheatingLog, updateCheatingLog }) {
       video.videoWidth === 0 ||
       video.videoHeight === 0
     ) {
-      console.warn('Video not ready for screenshot');
+      console.error('❌ [Screenshot] Video not ready:', {
+        videoExists: !!video,
+        readyState: video?.readyState,
+        width: video?.videoWidth,
+        height: video?.videoHeight
+      });
       return null;
     }
 
+    console.log(`📸 [${type}] Capturing screenshot...`);
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -46,8 +52,9 @@ export default function Home({ cheatingLog, updateCheatingLog }) {
     const file = dataURLtoFile(dataUrl, `cheating_${Date.now()}.jpg`);
 
     try {
+      console.log(`📤 [${type}] Uploading to Uploadcare...`);
       const result = await client.uploadFile(file);
-      console.log('✅ Uploaded to Uploadcare:', result.cdnUrl);
+      console.log(`✅ [${type}] Uploaded to Uploadcare:`, result.cdnUrl);
       
       const screenshot = {
         url: result.cdnUrl,
@@ -60,7 +67,7 @@ export default function Home({ cheatingLog, updateCheatingLog }) {
       
       return screenshot;
     } catch (error) {
-      console.error('❌ Upload failed:', error);
+      console.error(`❌ [${type}] Upload failed:`, error);
       return null;
     }
   };
@@ -72,20 +79,38 @@ export default function Home({ cheatingLog, updateCheatingLog }) {
     if (now - lastTime >= 3000) {
       setLastDetectionTime((prev) => ({ ...prev, [type]: now }));
 
-      // Capture and upload screenshot
+      console.log(`🚨 [${type}] Violation Detected!`);
+      
+      // Capture and upload screenshot (optional - don't block on failure)
       const screenshot = await captureScreenshotAndUpload(type);
       
-      if (screenshot) {
-        // Update cheating log with new count and screenshot
+      // Update count regardless of screenshot success
+      console.log(`📝 [${type}] Updating violation count...`);
+      
+      // Use functional form to prevent stale closure issues
+      updateCheatingLog((prevLog) => {
+        const currentCount = prevLog[`${type}Count`] || 0;
+        const newCount = currentCount + 1;
+        
+        console.log(`📊 [${type}] Count Update:`, {
+          previous: currentCount,
+          new: newCount,
+          screenshotCaptured: !!screenshot,
+          fullState: prevLog
+        });
+        
         const updatedLog = {
-          ...cheatingLog,
-          [`${type}Count`]: (cheatingLog[`${type}Count`] || 0) + 1,
-          screenshots: [...(cheatingLog.screenshots || []), screenshot]
+          ...prevLog,
+          [`${type}Count`]: newCount,
+          // Only add screenshot if upload succeeded
+          screenshots: screenshot 
+            ? [...(prevLog.screenshots || []), screenshot]
+            : (prevLog.screenshots || [])
         };
-
-        console.log('Updating cheating log with:', updatedLog);
-        updateCheatingLog(updatedLog);
-      }
+        
+        console.log(`✅ [${type}] Updated Log:`, updatedLog);
+        return updatedLog;
+      });
 
       switch (type) {
         case 'noFace':

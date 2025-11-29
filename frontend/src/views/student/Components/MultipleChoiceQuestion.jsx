@@ -28,8 +28,10 @@ export default function MultipleChoiceQuestion({ questions, saveUserTestScore, s
   const [isFinishTest, setisFinishTest] = useState(false);
 
   useEffect(() => {
-    setIsLastQuestion(currentQuestion === questions.length - 1);
-  }, [currentQuestion, questions.length]);
+    if (questions && questions.length > 0) {
+      setIsLastQuestion(currentQuestion === questions.length - 1);
+    }
+  }, [currentQuestion, questions]);
 
   const handleOptionChange = (event) => {
     setSelectedOption(event.target.value);
@@ -37,7 +39,7 @@ export default function MultipleChoiceQuestion({ questions, saveUserTestScore, s
 
   const handleNextQuestion = async () => {
     let isCorrect = false;
-    const currentQuestionData = questions[currentQuestion];
+    const currentQuestionData = questions && questions[currentQuestion] ? questions[currentQuestion] : null;
 
     if (currentQuestionData && currentQuestionData.options) {
       const correctOption = currentQuestionData.options.find((option) => option.isCorrect);
@@ -49,7 +51,9 @@ export default function MultipleChoiceQuestion({ questions, saveUserTestScore, s
     // Add answer to answers Map
     setAnswers((prev) => {
       const newAnswers = new Map(prev);
-      newAnswers.set(currentQuestionData._id, selectedOption);
+      if (currentQuestionData) {
+        newAnswers.set(currentQuestionData._id, selectedOption);
+      }
       return newAnswers;
     });
 
@@ -64,7 +68,7 @@ export default function MultipleChoiceQuestion({ questions, saveUserTestScore, s
         const answersObject = Object.fromEntries(answers);
 
         // Add the current answer if it's the last question
-        if (selectedOption) {
+        if (selectedOption && currentQuestionData) {
           answersObject[currentQuestionData._id] = selectedOption;
         }
 
@@ -88,7 +92,7 @@ export default function MultipleChoiceQuestion({ questions, saveUserTestScore, s
     }
 
     setSelectedOption(null);
-    if (currentQuestion < questions.length - 1) {
+    if (currentQuestion < (questions && questions.length ? questions.length - 1 : -1)) {
       setCurrentQuestion(currentQuestion + 1);
     } else {
       setisFinishTest(true);
@@ -114,7 +118,7 @@ export default function MultipleChoiceQuestion({ questions, saveUserTestScore, s
           Question {currentQuestion + 1}:
         </Typography>
         <Typography variant="body1" mb={3}>
-          {questions[currentQuestion].question}
+          {questions && questions[currentQuestion] ? questions[currentQuestion].question : 'Loading...'}
         </Typography>
         <Box mb={10}>
           <FormControl component="fieldset">
@@ -124,14 +128,16 @@ export default function MultipleChoiceQuestion({ questions, saveUserTestScore, s
               value={selectedOption}
               onChange={handleOptionChange}
             >
-              {questions[currentQuestion].options.map((option) => (
-                <FormControlLabel
-                  key={option._id}
-                  value={option._id}
-                  control={<Radio />}
-                  label={option.optionText}
-                />
-              ))}
+              {questions && questions[currentQuestion] && questions[currentQuestion].options ? (
+                questions[currentQuestion].options.map((option) => (
+                  <FormControlLabel
+                    key={option._id}
+                    value={option._id}
+                    control={<Radio />}
+                    label={option.optionText}
+                  />
+                ))
+              ) : null}
             </RadioGroup>
           </FormControl>
         </Box>

@@ -10,6 +10,9 @@ import {
   Radio,
   Stack,
   Typography,
+  CircularProgress,
+  Box,
+  Alert,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import Link from '@mui/material/Link';
@@ -24,7 +27,7 @@ import { useGetQuestionsQuery } from 'src/slices/examApiSlice';
 function Copyright(props) {
   return (
     <Typography variant="body2" color="text.secondary" align="center" {...props}>
-      {'Copyright © '}
+      {'Copyright '}
       <Link color="inherit" href="https://mui.com/">
         Your Website
       </Link>{' '}
@@ -38,7 +41,7 @@ const DescriptionAndInstructions = () => {
   const navigate = useNavigate();
 
   const { examId } = useParams();
-  const { data: questions, isLoading } = useGetQuestionsQuery(examId); // Fetch questions using examId
+  const { data: questions, isLoading, isError, error } = useGetQuestionsQuery(examId); // Fetch questions using examId
   // const { data: questions, isLoading } = useGetQuestionsQuery({ examId });
 
   // fech exam data from backend
@@ -61,6 +64,51 @@ const DescriptionAndInstructions = () => {
       toast.error('Test date is not valid.');
     }
   };
+
+  // Handle loading state
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent>
+          <Box display="flex" justifyContent="center" alignItems="center" minHeight="300px">
+            <CircularProgress />
+          </Box>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Handle error state
+  if (isError) {
+    const errorMessage = error?.data?.message || 'Failed to load exam details';
+    const isNotAuthorized = error?.status === 403;
+
+    return (
+      <Card>
+        <CardContent>
+          <Alert 
+            severity="error" 
+            sx={{ mb: 2 }}
+            action={
+              <Button color="inherit" size="small" onClick={() => navigate('/exams')}>
+                Back to Exams
+              </Button>
+            }
+          >
+            <Typography variant="h6" gutterBottom>
+              {isNotAuthorized ? 'Access Denied' : 'Error Loading Exam'}
+            </Typography>
+            <Typography variant="body2">
+              {isNotAuthorized 
+                ? 'You are not authorized to access this exam. This exam has not been assigned to you. Please contact your teacher if you believe this is an error.'
+                : errorMessage
+              }
+            </Typography>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>

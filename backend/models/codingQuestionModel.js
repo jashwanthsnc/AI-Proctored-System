@@ -16,6 +16,21 @@ const codingSchema = new mongoose.Schema(
       required: [true, "Question description is required"],
       trim: true,
     },
+    difficulty: {
+      type: String,
+      enum: ["easy", "medium", "hard"],
+      default: "medium",
+    },
+    timeLimit: {
+      type: Number,
+      default: 30,
+      min: [1, "Time limit must be at least 1 minute"],
+    },
+    points: {
+      type: Number,
+      default: 100,
+      min: [1, "Points must be at least 1"],
+    },
     submittedAnswer: {
       code: {
         type: String,
@@ -44,6 +59,7 @@ const codingSchema = new mongoose.Schema(
 
 // Add any necessary indexes
 codingSchema.index({ examId: 1 });
+codingSchema.index({ difficulty: 1 });
 
 const CodingQuestion = mongoose.model("CodingQuestion", codingSchema);
 

@@ -8,6 +8,10 @@ const questionSchema = mongoose.Schema(
     },
     options: [
       {
+        id: {
+          type: String,
+          required: true,
+        },
         optionText: {
           type: String,
           required: true,

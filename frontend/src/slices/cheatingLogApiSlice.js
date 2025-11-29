@@ -12,6 +12,7 @@ export const cheatingLogApiSlice = apiSlice.injectEndpoints({
         url: `${CHEATING_LOGS_URL}/cheatingLogs/${examId}`,
         method: 'GET',
       }),
+      providesTags: ['CheatingLogs'],
     }),
     // Save a new cheating log entry for an exam
     saveCheatingLog: builder.mutation({
@@ -20,9 +21,40 @@ export const cheatingLogApiSlice = apiSlice.injectEndpoints({
         method: 'POST',
         body: data,
       }),
+      invalidatesTags: ['CheatingLogs', 'ActiveStudents', 'RecentViolations', 'ProctoringStats'],
+    }),
+    // Get active students (currently taking exams)
+    getActiveStudents: builder.query({
+      query: () => ({
+        url: `${CHEATING_LOGS_URL}/exam/active-students`,
+        method: 'GET',
+      }),
+      providesTags: ['ActiveStudents'],
+    }),
+    // Get recent violations (last 30 minutes)
+    getRecentViolations: builder.query({
+      query: () => ({
+        url: `${CHEATING_LOGS_URL}/exam/recent-violations`,
+        method: 'GET',
+      }),
+      providesTags: ['RecentViolations'],
+    }),
+    // Get live proctoring statistics
+    getProctoringStats: builder.query({
+      query: () => ({
+        url: `${CHEATING_LOGS_URL}/exam/proctoring-stats`,
+        method: 'GET',
+      }),
+      providesTags: ['ProctoringStats'],
     }),
   }),
 });
 
 // Export the generated hooks for each endpoint
-export const { useGetCheatingLogsQuery, useSaveCheatingLogMutation } = cheatingLogApiSlice;
+export const { 
+  useGetCheatingLogsQuery, 
+  useSaveCheatingLogMutation,
+  useGetActiveStudentsQuery,
+  useGetRecentViolationsQuery,
+  useGetProctoringStatsQuery,
+} = cheatingLogApiSlice;
