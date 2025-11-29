@@ -1,6 +1,6 @@
 // Theme Provider
 import { CssBaseline, ThemeProvider } from '@mui/material';
-import { baselightTheme } from './theme/DefaultColors';
+import { basedarkTheme } from './theme/DefaultColors';
 // Router Provider
 import { RouterProvider } from 'react-router-dom';
 import Router from './routes/Router';
@@ -15,7 +15,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { CheatingLogProvider } from './context/CheatingLogContext';
 
 function App() {
-  const theme = baselightTheme;
+  const theme = basedarkTheme;
   return (
     <ThemeProvider theme={theme}>
       <Provider store={store}>

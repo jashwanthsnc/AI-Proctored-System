@@ -65,7 +65,7 @@ const Sidebar = (props) => {
                   mr: 5,
                 }}
               >
-                AI_EVAL_8
+                ATE-PROT
               </Typography>
             </Box>
 

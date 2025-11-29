@@ -111,7 +111,7 @@ const Login = () => {
                     textShadow: '1px 1px 2px rgba(0, 0, 0, 0.3)', // Optional shadow effect
                   }}
                 >
-                  AI_Evalu8
+                  ATE-PROT
                 </Typography>
               </Box>
               <AuthLogin
@@ -124,7 +124,7 @@ const Login = () => {
                 subtitle={
                   <Stack direction="row" spacing={1} justifyContent="center" mt={3}>
                     <Typography color="textSecondary" variant="h6" fontWeight="500">
-                      New to Modernize?
+                      New to ATE-PROT?
                     </Typography>
                     <Typography
                       component={Link}
