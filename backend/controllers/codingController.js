@@ -40,11 +40,15 @@ const submitCodingAnswer = asyncHandler(async (req, res) => {
 // @route   POST /api/coding/question
 // @access  Private (Teacher)
 const createCodingQuestion = asyncHandler(async (req, res) => {
-  const { question, description, examId } = req.body;
+  const { question, description, examId, difficulty, timeLimit, points, testCases } = req.body;
   console.log("Received coding question data:", {
     question,
     description,
     examId,
+    difficulty,
+    timeLimit,
+    points,
+    testCases,
   });
 
   if (!question || !description || !examId) {
@@ -55,6 +59,21 @@ const createCodingQuestion = asyncHandler(async (req, res) => {
 
     res.status(400);
     throw new Error(`Missing required fields: ${missingFields.join(", ")}`);
+  }
+
+  // Validate test cases
+  if (!testCases || testCases.length === 0) {
+    res.status(400);
+    throw new Error("At least one test case is required");
+  }
+
+  // Validate each test case
+  for (let i = 0; i < testCases.length; i++) {
+    const tc = testCases[i];
+    if (!tc.input || !tc.expectedOutput) {
+      res.status(400);
+      throw new Error(`Test case #${i + 1} must have both input and expected output`);
+    }
   }
 
   try {
@@ -73,6 +92,10 @@ const createCodingQuestion = asyncHandler(async (req, res) => {
       question,
       description,
       examId: examId.toString(),
+      difficulty: difficulty || 'medium',
+      timeLimit: timeLimit || 30,
+      points: points || 100,
+      testCases: testCases || [],
       teacher: req.user._id,
     });
 
@@ -145,10 +168,23 @@ const getCodingQuestionsByExamId = asyncHandler(async (req, res) => {
     });
     console.log("Found questions:", questions);
 
+    // Filter test cases based on user role
+    const processedQuestions = questions.map(question => {
+      const questionObj = question.toObject();
+      
+      // If user is a student, only show sample test cases
+      if (req.user && req.user.role === 'student') {
+        questionObj.testCases = questionObj.testCases ? 
+          questionObj.testCases.filter(tc => tc.isSample === true) : [];
+      }
+      
+      return questionObj;
+    });
+
     res.status(200).json({
       success: true,
-      count: questions.length,
-      data: questions,
+      count: processedQuestions.length,
+      data: processedQuestions,
     });
   } catch (error) {
     console.error("Error fetching coding questions:", error);
@@ -162,11 +198,22 @@ const getCodingQuestionsByExamId = asyncHandler(async (req, res) => {
 // @access  Private (teacher)
 const updateCodingQuestion = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { question, description, difficulty, timeLimit, points } = req.body;
+  const { question, description, difficulty, timeLimit, points, testCases } = req.body;
 
   if (!question || !description) {
     res.status(400);
     throw new Error("Question and description are required");
+  }
+
+  // Validate test cases if provided
+  if (testCases && testCases.length > 0) {
+    for (let i = 0; i < testCases.length; i++) {
+      const tc = testCases[i];
+      if (!tc.input || !tc.expectedOutput) {
+        res.status(400);
+        throw new Error(`Test case #${i + 1} must have both input and expected output`);
+      }
+    }
   }
 
   const existingQuestion = await CodingQuestion.findById(id);
@@ -181,6 +228,9 @@ const updateCodingQuestion = asyncHandler(async (req, res) => {
   existingQuestion.difficulty = difficulty;
   existingQuestion.timeLimit = timeLimit;
   existingQuestion.points = points;
+  if (testCases) {
+    existingQuestion.testCases = testCases;
+  }
 
   const updatedQuestion = await existingQuestion.save();
 

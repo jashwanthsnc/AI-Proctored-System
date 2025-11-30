@@ -12,6 +12,9 @@ const saveCheatingLog = asyncHandler(async (req, res) => {
     multipleFaceCount,
     cellPhoneCount,
     prohibitedObjectCount,
+    browserLockdownViolations,
+    tabSwitchViolations,
+    windowBlurViolations,
     examId,
     username,
     email,
@@ -22,7 +25,15 @@ const saveCheatingLog = asyncHandler(async (req, res) => {
     examId,
     email,
     username,
-    violations: { noFaceCount, multipleFaceCount, cellPhoneCount, prohibitedObjectCount },
+    violations: { 
+      noFaceCount, 
+      multipleFaceCount, 
+      cellPhoneCount, 
+      prohibitedObjectCount,
+      browserLockdownViolations,
+      tabSwitchViolations,
+      windowBlurViolations
+    },
     screenshotCount: screenshots?.length || 0
   });
 
@@ -41,6 +52,9 @@ const saveCheatingLog = asyncHandler(async (req, res) => {
         multipleFaceCount: parseInt(multipleFaceCount) || 0,
         cellPhoneCount: parseInt(cellPhoneCount) || 0,
         prohibitedObjectCount: parseInt(prohibitedObjectCount) || 0,
+        browserLockdownViolations: parseInt(browserLockdownViolations) || 0,
+        tabSwitchViolations: parseInt(tabSwitchViolations) || 0,
+        windowBlurViolations: parseInt(windowBlurViolations) || 0,
       },
       $push: {
         screenshots: { $each: screenshots || [] }
@@ -64,7 +78,10 @@ const saveCheatingLog = asyncHandler(async (req, res) => {
       noFace: savedLog.noFaceCount,
       multiple: savedLog.multipleFaceCount,
       phone: savedLog.cellPhoneCount,
-      prohibited: savedLog.prohibitedObjectCount
+      prohibited: savedLog.prohibitedObjectCount,
+      browserLockdown: savedLog.browserLockdownViolations,
+      tabSwitch: savedLog.tabSwitchViolations,
+      windowBlur: savedLog.windowBlurViolations
     }
   });
 
@@ -219,7 +236,10 @@ const getRecentViolations = asyncHandler(async (req, res) => {
         { noFaceCount: { $gt: 0 } },
         { multipleFaceCount: { $gt: 0 } },
         { cellPhoneCount: { $gt: 0 } },
-        { prohibitedObjectCount: { $gt: 0 } }
+        { prohibitedObjectCount: { $gt: 0 } },
+        { browserLockdownViolations: { $gt: 0 } },
+        { tabSwitchViolations: { $gt: 0 } },
+        { windowBlurViolations: { $gt: 0 } }
       ]
     })
     .sort({ updatedAt: -1 })
@@ -229,6 +249,7 @@ const getRecentViolations = asyncHandler(async (req, res) => {
     recentViolations.forEach((log, index) => {
       console.log(`  ${index + 1}. ${log.username} (${log.email}) - Updated: ${log.updatedAt}`);
       console.log(`     No Face: ${log.noFaceCount}, Multiple: ${log.multipleFaceCount}, Phone: ${log.cellPhoneCount}, Prohibited: ${log.prohibitedObjectCount}`);
+      console.log(`     Tab Switch: ${log.tabSwitchViolations || 0}, Window Blur: ${log.windowBlurViolations || 0}, Browser Lock: ${log.browserLockdownViolations || 0}`);
     });
 
     // Enrich with exam names
@@ -245,7 +266,17 @@ const getRecentViolations = asyncHandler(async (req, res) => {
           multipleFaceCount: log.multipleFaceCount,
           cellPhoneCount: log.cellPhoneCount,
           prohibitedObjectCount: log.prohibitedObjectCount,
-          totalViolations: log.noFaceCount + log.multipleFaceCount + log.cellPhoneCount + log.prohibitedObjectCount,
+          browserLockdownViolations: log.browserLockdownViolations || 0,
+          tabSwitchViolations: log.tabSwitchViolations || 0,
+          windowBlurViolations: log.windowBlurViolations || 0,
+          totalViolations: 
+            log.noFaceCount + 
+            log.multipleFaceCount + 
+            log.cellPhoneCount + 
+            log.prohibitedObjectCount +
+            (log.browserLockdownViolations || 0) +
+            (log.tabSwitchViolations || 0) +
+            (log.windowBlurViolations || 0),
           screenshots: log.screenshots,
           lastViolation: log.updatedAt,
           createdAt: log.createdAt

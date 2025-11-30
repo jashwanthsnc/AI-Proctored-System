@@ -10,6 +10,9 @@ export const CheatingLogProvider = ({ children }) => {
     multipleFaceCount: 0,
     cellPhoneCount: 0,
     prohibitedObjectCount: 0,
+    browserLockdownViolations: 0,
+    tabSwitchViolations: 0,
+    windowBlurViolations: 0,
     examId: '',
     username: userInfo?.name || '',
     email: userInfo?.email || '',
@@ -54,6 +57,15 @@ export const CheatingLogProvider = ({ children }) => {
         prohibitedObjectCount: newLog.prohibitedObjectCount !== undefined
           ? Number(newLog.prohibitedObjectCount)
           : Number(prev.prohibitedObjectCount || 0),
+        browserLockdownViolations: newLog.browserLockdownViolations !== undefined
+          ? Number(newLog.browserLockdownViolations)
+          : Number(prev.browserLockdownViolations || 0),
+        tabSwitchViolations: newLog.tabSwitchViolations !== undefined
+          ? Number(newLog.tabSwitchViolations)
+          : Number(prev.tabSwitchViolations || 0),
+        windowBlurViolations: newLog.windowBlurViolations !== undefined
+          ? Number(newLog.windowBlurViolations)
+          : Number(prev.windowBlurViolations || 0),
         // Preserve or update screenshots array
         screenshots: newLog.screenshots !== undefined
           ? newLog.screenshots
@@ -74,6 +86,9 @@ export const CheatingLogProvider = ({ children }) => {
       multipleFaceCount: 0,
       cellPhoneCount: 0,
       prohibitedObjectCount: 0,
+      browserLockdownViolations: 0,
+      tabSwitchViolations: 0,
+      windowBlurViolations: 0,
       examId: examId,
       username: userInfo?.name || '',
       email: userInfo?.email || '',

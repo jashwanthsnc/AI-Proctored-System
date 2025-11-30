@@ -31,6 +31,28 @@ const codingSchema = new mongoose.Schema(
       default: 100,
       min: [1, "Points must be at least 1"],
     },
+    testCases: [
+      {
+        input: {
+          type: String,
+          required: [true, "Test case input is required"],
+          trim: true,
+        },
+        expectedOutput: {
+          type: String,
+          required: [true, "Test case expected output is required"],
+          trim: true,
+        },
+        isSample: {
+          type: Boolean,
+          default: false, // false = hidden test case, true = sample (visible to students)
+        },
+        points: {
+          type: Number,
+          default: 10, // Points awarded for passing this test case
+        },
+      },
+    ],
     submittedAnswer: {
       code: {
         type: String,

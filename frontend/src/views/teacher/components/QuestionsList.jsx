@@ -271,6 +271,7 @@ const QuestionsList = ({ onAddMCQ, onAddCoding, onEditMCQ, onEditCoding, selecte
                   <TableCell width="35%">Description</TableCell>
                   <TableCell width="10%">Difficulty</TableCell>
                   <TableCell width="10%">Time/Points</TableCell>
+                  <TableCell width="10%">Test Cases</TableCell>
                   <TableCell width="10%">Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -314,6 +315,14 @@ const QuestionsList = ({ onAddMCQ, onAddCoding, onEditMCQ, onEditCoding, selecte
                       </Typography>
                       <Typography variant="caption" color="primary">
                         {question.points} pts
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption" display="block">
+                        {question.testCases?.length || 0} total
+                      </Typography>
+                      <Typography variant="caption" color="primary">
+                        {question.testCases?.filter(tc => tc.isSample).length || 0} sample
                       </Typography>
                     </TableCell>
                     <TableCell>

@@ -4,7 +4,7 @@ import * as cocossd from '@tensorflow-models/coco-ssd';
 import Webcam from 'react-webcam';
 import { drawRect } from './utilities';
 import { Box, Card } from '@mui/material';
-import swal from 'sweetalert';
+import { toast } from 'react-toastify';
 import { UploadClient } from '@uploadcare/upload-client';
 
 const client = new UploadClient({ publicKey: 'e69ab6e5db6d4a41760b' });
@@ -13,6 +13,7 @@ export default function Home({ cheatingLog, updateCheatingLog }) {
   const webcamRef = useRef(null);
   const canvasRef = useRef(null);
   const [lastDetectionTime, setLastDetectionTime] = useState({});
+  const lastGlobalWarningTimeRef = useRef(0);  // Use ref for synchronous updates
   const [screenshots, setScreenshots] = useState([]);
 
   // Initialize screenshots array when component mounts
@@ -76,9 +77,12 @@ export default function Home({ cheatingLog, updateCheatingLog }) {
     const now = Date.now();
     const lastTime = lastDetectionTime[type] || 0;
 
-    if (now - lastTime >= 3000) {
+    // Rate limit: Only trigger warning once every 30 seconds for the same violation type
+    // Also enforce global cooldown: no more than 1 warning toast every 10 seconds (regardless of type)
+    if (now - lastTime >= 30000 && now - lastGlobalWarningTimeRef.current >= 10000) {
       setLastDetectionTime((prev) => ({ ...prev, [type]: now }));
-
+      lastGlobalWarningTimeRef.current = now;  // Update ref immediately (synchronous)
+      
       console.log(`🚨 [${type}] Violation Detected!`);
       
       // Capture and upload screenshot (optional - don't block on failure)
@@ -114,16 +118,16 @@ export default function Home({ cheatingLog, updateCheatingLog }) {
 
       switch (type) {
         case 'noFace':
-          swal('Face Not Visible', 'Warning Recorded', 'warning');
+          toast.warning('👤 Face Not Visible - Warning Recorded');
           break;
         case 'multipleFace':
-          swal('Multiple Faces Detected', 'Warning Recorded', 'warning');
+          toast.warning('👥 Multiple Faces Detected - Warning Recorded');
           break;
         case 'cellPhone':
-          swal('Cell Phone Detected', 'Warning Recorded', 'warning');
+          toast.warning('📱 Cell Phone Detected - Warning Recorded');
           break;
         case 'prohibitedObject':
-          swal('Prohibited Object Detected', 'Warning Recorded', 'warning');
+          toast.warning('📚 Prohibited Object Detected - Warning Recorded');
           break;
         default:
           break;
@@ -138,7 +142,7 @@ export default function Home({ cheatingLog, updateCheatingLog }) {
       setInterval(() => detect(net), 1000);
     } catch (error) {
       console.error('Error loading model:', error);
-      swal('Error', 'Failed to load AI model. Please refresh the page.', 'error');
+      toast.error('Error loading AI model. Please refresh the page.');
     }
   };
 

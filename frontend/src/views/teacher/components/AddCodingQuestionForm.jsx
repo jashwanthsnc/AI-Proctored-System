@@ -15,8 +15,16 @@ import {
   Alert,
   InputAdornment,
   Divider,
+  IconButton,
+  Switch,
+  FormControlLabel,
+  Card,
+  CardContent,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
-import { Code, Schedule, EmojiEvents, Save, Refresh } from '@mui/icons-material';
+import { Code, Schedule, EmojiEvents, Save, Refresh, Add, Delete, ExpandMore, CheckCircle, Visibility, VisibilityOff } from '@mui/icons-material';
 import { useGetExamsQuery, useUpdateCodingQuestionMutation } from 'src/slices/examApiSlice';
 import { toast } from 'react-toastify';
 import axiosInstance from '../../../axios';
@@ -31,6 +39,9 @@ const AddCodingQuestionForm = ({ onSuccess, editingQuestion, selectedExamId: pro
   const [timeLimit, setTimeLimit] = useState(30);
   const [points, setPoints] = useState(100);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [testCases, setTestCases] = useState([
+    { input: '', expectedOutput: '', isSample: true, points: 10 }
+  ]);
 
   const { data: examsData, isLoading: examsLoading } = useGetExamsQuery();
   const [updateCodingQuestion] = useUpdateCodingQuestionMutation();
@@ -46,6 +57,10 @@ const AddCodingQuestionForm = ({ onSuccess, editingQuestion, selectedExamId: pro
       setTimeLimit(editingQuestion.timeLimit || 30);
       setPoints(editingQuestion.points || 100);
       setSelectedExamId(editingQuestion.examId || '');
+      setTestCases(editingQuestion.testCases && editingQuestion.testCases.length > 0 
+        ? editingQuestion.testCases 
+        : [{ input: '', expectedOutput: '', isSample: true, points: 10 }]
+      );
     }
   }, [editingQuestion]);
 
@@ -66,6 +81,25 @@ const AddCodingQuestionForm = ({ onSuccess, editingQuestion, selectedExamId: pro
     setDifficulty('medium');
     setTimeLimit(30);
     setPoints(100);
+    setTestCases([{ input: '', expectedOutput: '', isSample: true, points: 10 }]);
+  };
+
+  const handleAddTestCase = () => {
+    setTestCases([...testCases, { input: '', expectedOutput: '', isSample: false, points: 10 }]);
+  };
+
+  const handleRemoveTestCase = (index) => {
+    if (testCases.length > 1) {
+      setTestCases(testCases.filter((_, i) => i !== index));
+    } else {
+      toast.error('At least one test case is required');
+    }
+  };
+
+  const handleTestCaseChange = (index, field, value) => {
+    const updatedTestCases = [...testCases];
+    updatedTestCases[index][field] = value;
+    setTestCases(updatedTestCases);
   };
 
   const handleAddOrUpdateCodingQuestion = async () => {
@@ -95,12 +129,30 @@ const AddCodingQuestionForm = ({ onSuccess, editingQuestion, selectedExamId: pro
       return;
     }
 
+    // Validate test cases
+    if (testCases.length === 0) {
+      toast.error('Please add at least one test case');
+      return;
+    }
+
+    const hasEmptyTestCase = testCases.some(tc => !tc.input.trim() || !tc.expectedOutput.trim());
+    if (hasEmptyTestCase) {
+      toast.error('All test cases must have input and expected output');
+      return;
+    }
+
+    const hasSampleTestCase = testCases.some(tc => tc.isSample);
+    if (!hasSampleTestCase) {
+      toast.warning('Consider adding at least one sample test case for students to see');
+    }
+
     const codingQuestionData = {
       question,
       description,
       difficulty,
       timeLimit,
       points,
+      testCases,
     };
 
     setIsSubmitting(true);
@@ -231,6 +283,7 @@ const AddCodingQuestionForm = ({ onSuccess, editingQuestion, selectedExamId: pro
           Editing question for exam: <strong>{examsData?.find(e => e.examId === selectedExamId)?.examName}</strong>
         </Alert>
       )}
+
       {/* Question Details */}
       <Paper elevation={1} sx={{ p: 3, mb: 3, borderLeft: 4, borderColor: 'success.main' }}>
         <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -247,10 +300,16 @@ const AddCodingQuestionForm = ({ onSuccess, editingQuestion, selectedExamId: pro
             onChange={(e) => setQuestion(e.target.value)}
             fullWidth
             required
-            helperText="A clear, concise title for the coding problem"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Code />
+                </InputAdornment>
+              ),
+            }}
           />
 
-          {/* Question Description with Rich Text Editor */}
+          {/* Question Description (Rich Text Editor) */}
           <Box>
             <Typography variant="subtitle2" gutterBottom sx={{ mb: 1 }}>
               Description & Instructions *
@@ -317,89 +376,206 @@ const AddCodingQuestionForm = ({ onSuccess, editingQuestion, selectedExamId: pro
                 placeholder="Provide detailed problem description, input/output format, constraints, and examples. You can format text, add code blocks, lists, etc."
               />
             </Paper>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
               Include problem statement, input/output specifications, constraints, and sample test cases
             </Typography>
           </Box>
+
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth>
+                <InputLabel>Difficulty Level</InputLabel>
+                <Select
+                  value={difficulty}
+                  label="Difficulty Level"
+                  onChange={(e) => setDifficulty(e.target.value)}
+                  startAdornment={
+                    <InputAdornment position="start">
+                      <EmojiEvents />
+                    </InputAdornment>
+                  }
+                >
+                  <MenuItem value="easy">Easy</MenuItem>
+                  <MenuItem value="medium">Medium</MenuItem>
+                  <MenuItem value="hard">Hard</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <TextField
+                label="Time Limit"
+                type="number"
+                value={timeLimit}
+                onChange={(e) => setTimeLimit(Number(e.target.value))}
+                fullWidth
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Schedule />
+                    </InputAdornment>
+                  ),
+                  endAdornment: <InputAdornment position="end">minutes</InputAdornment>,
+                  inputProps: { min: 1 },
+                }}
+                helperText="Time allowed for solving"
+              />
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <TextField
+                label="Points"
+                type="number"
+                value={points}
+                onChange={(e) => setPoints(Number(e.target.value))}
+                fullWidth
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <EmojiEvents />
+                    </InputAdornment>
+                  ),
+                  inputProps: { min: 1 },
+                }}
+                helperText="Points awarded for correct answer"
+              />
+            </Grid>
+          </Grid>
         </Stack>
       </Paper>
 
-      {/* Question Configuration */}
-      <Paper elevation={1} sx={{ p: 3, mb: 3, borderLeft: 4, borderColor: 'warning.main' }}>
-        <Typography variant="h6" gutterBottom>
-          Configuration
-        </Typography>
+      {/* Test Cases Section */}
+      <Grid item xs={12}>
+        <Paper elevation={2} sx={{ p: 3, borderLeft: 4, borderColor: 'success.main' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CheckCircle color="success" />
+              Test Cases
+            </Typography>
+            <Button
+              variant="outlined"
+              startIcon={<Add />}
+              onClick={handleAddTestCase}
+              size="small"
+              color="success"
+            >
+              Add Test Case
+            </Button>
+          </Box>
 
-        <Grid container spacing={3} sx={{ mt: 1 }}>
-          {/* Difficulty */}
-          <Grid item xs={12} md={4}>
-            <FormControl fullWidth>
-              <InputLabel>Difficulty Level</InputLabel>
-              <Select
-                value={difficulty}
-                onChange={(e) => setDifficulty(e.target.value)}
-                label="Difficulty Level"
-              >
-                <MenuItem value="easy">
-                  <Chip label="Easy" color="success" size="small" sx={{ mr: 1 }} />
-                  Easy
-                </MenuItem>
-                <MenuItem value="medium">
-                  <Chip label="Medium" color="warning" size="small" sx={{ mr: 1 }} />
-                  Medium
-                </MenuItem>
-                <MenuItem value="hard">
-                  <Chip label="Hard" color="error" size="small" sx={{ mr: 1 }} />
-                  Hard
-                </MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
+          <Alert severity="info" sx={{ mb: 3 }}>
+            <Typography variant="body2" gutterBottom>
+              <strong>Sample Test Cases:</strong> Visible to students (use for examples)
+            </Typography>
+            <Typography variant="body2">
+              <strong>Hidden Test Cases:</strong> Not visible to students (use for evaluation)
+            </Typography>
+          </Alert>
 
-          {/* Time Limit */}
-          <Grid item xs={12} md={4}>
-            <TextField
-              label="Time Limit"
-              type="number"
-              value={timeLimit}
-              onChange={(e) => setTimeLimit(Number(e.target.value))}
-              fullWidth
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Schedule />
-                  </InputAdornment>
-                ),
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <Typography variant="caption">minutes</Typography>
-                  </InputAdornment>
-                ),
-              }}
-              helperText="Time allocated for this question"
-            />
-          </Grid>
+          <Stack spacing={2}>
+            {testCases.map((testCase, index) => (
+              <Accordion key={index} defaultExpanded={index === 0}>
+                <AccordionSummary expandIcon={<ExpandMore />}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+                    <Typography variant="subtitle1" fontWeight="bold">
+                      Test Case #{index + 1}
+                    </Typography>
+                    {testCase.isSample ? (
+                      <Chip 
+                        icon={<Visibility />} 
+                        label="Sample" 
+                        size="small" 
+                        color="primary" 
+                      />
+                    ) : (
+                      <Chip 
+                        icon={<VisibilityOff />} 
+                        label="Hidden" 
+                        size="small" 
+                        color="secondary" 
+                      />
+                    )}
+                    <Chip 
+                      label={`${testCase.points || 10} pts`} 
+                      size="small" 
+                      color="success"
+                      variant="outlined"
+                    />
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Stack spacing={2}>
+                    <TextField
+                      label="Input"
+                      placeholder="e.g., 5\n10"
+                      multiline
+                      rows={3}
+                      value={testCase.input}
+                      onChange={(e) => handleTestCaseChange(index, 'input', e.target.value)}
+                      fullWidth
+                      helperText="Input that will be passed to the student's code"
+                    />
+                    <TextField
+                      label="Expected Output"
+                      placeholder="e.g., 15"
+                      multiline
+                      rows={3}
+                      value={testCase.expectedOutput}
+                      onChange={(e) => handleTestCaseChange(index, 'expectedOutput', e.target.value)}
+                      fullWidth
+                      helperText="The expected output for this input"
+                    />
+                    <Grid container spacing={2} alignItems="center">
+                      <Grid item xs={12} sm={6}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={testCase.isSample}
+                              onChange={(e) => handleTestCaseChange(index, 'isSample', e.target.checked)}
+                              color="primary"
+                            />
+                          }
+                          label={testCase.isSample ? "Sample (Visible)" : "Hidden"}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <TextField
+                          label="Points"
+                          type="number"
+                          value={testCase.points}
+                          onChange={(e) => handleTestCaseChange(index, 'points', parseInt(e.target.value) || 10)}
+                          size="small"
+                          fullWidth
+                          InputProps={{
+                            inputProps: { min: 1 }
+                          }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={2}>
+                        <IconButton
+                          color="error"
+                          onClick={() => handleRemoveTestCase(index)}
+                          disabled={testCases.length === 1}
+                        >
+                          <Delete />
+                        </IconButton>
+                      </Grid>
+                    </Grid>
+                  </Stack>
+                </AccordionDetails>
+              </Accordion>
+            ))}
+          </Stack>
 
-          {/* Points */}
-          <Grid item xs={12} md={4}>
-            <TextField
-              label="Points"
-              type="number"
-              value={points}
-              onChange={(e) => setPoints(Number(e.target.value))}
-              fullWidth
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <EmojiEvents />
-                  </InputAdornment>
-                ),
-              }}
-              helperText="Points awarded for correct answer"
-            />
-          </Grid>
-        </Grid>
-      </Paper>
+          <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              <strong>Total Test Cases:</strong> {testCases.length} ({testCases.filter(tc => tc.isSample).length} sample, {testCases.filter(tc => !tc.isSample).length} hidden)
+              <br />
+              <strong>Total Test Points:</strong> {testCases.reduce((sum, tc) => sum + (parseInt(tc.points) || 10), 0)}
+            </Typography>
+          </Box>
+        </Paper>
+      </Grid>
 
       {/* Preview */}
       <Alert severity="info" sx={{ mb: 3 }}>

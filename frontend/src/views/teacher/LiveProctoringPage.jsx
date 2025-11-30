@@ -37,6 +37,9 @@ import {
   IconUserOff,
   IconShieldX,
   IconClock,
+  IconBrowserCheck,
+  IconLayoutColumns,
+  IconFocusCentered,
 } from '@tabler/icons-react';
 import PageContainer from 'src/components/container/PageContainer';
 import DashboardCard from 'src/components/shared/DashboardCard';
@@ -138,6 +141,12 @@ const LiveProctoringPage = () => {
         return <IconDeviceMobile size={16} />;
       case 'prohibitedObject':
         return <IconShieldX size={16} />;
+      case 'tabSwitch':
+        return <IconLayoutColumns size={16} />;
+      case 'windowBlur':
+        return <IconFocusCentered size={16} />;
+      case 'browserLockdown':
+        return <IconBrowserCheck size={16} />;
       default:
         return <IconAlertTriangle size={16} />;
     }
@@ -363,6 +372,9 @@ const LiveProctoringPage = () => {
                     <TableCell align="center">Multiple Faces</TableCell>
                     <TableCell align="center">Cell Phone</TableCell>
                     <TableCell align="center">Prohibited</TableCell>
+                    <TableCell align="center">Tab Switch</TableCell>
+                    <TableCell align="center">Window Blur</TableCell>
+                    <TableCell align="center">Browser Lock</TableCell>
                     <TableCell align="center">Total</TableCell>
                     <TableCell>Last Violation</TableCell>
                   </TableRow>
@@ -413,6 +425,30 @@ const LiveProctoringPage = () => {
                           color={getViolationColor(violation.prohibitedObjectCount)}
                           size="small"
                           icon={getViolationIcon('prohibitedObject')}
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        <Chip
+                          label={violation.tabSwitchViolations || 0}
+                          color={getViolationColor(violation.tabSwitchViolations || 0)}
+                          size="small"
+                          icon={getViolationIcon('tabSwitch')}
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        <Chip
+                          label={violation.windowBlurViolations || 0}
+                          color={getViolationColor(violation.windowBlurViolations || 0)}
+                          size="small"
+                          icon={getViolationIcon('windowBlur')}
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        <Chip
+                          label={violation.browserLockdownViolations || 0}
+                          color={getViolationColor(violation.browserLockdownViolations || 0)}
+                          size="small"
+                          icon={getViolationIcon('browserLockdown')}
                         />
                       </TableCell>
                       <TableCell align="center">

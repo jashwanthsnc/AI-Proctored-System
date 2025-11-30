@@ -1,7 +1,6 @@
 import {
   Button,
-  Card,
-  CardContent,
+  Box,
   Checkbox,
   FormControlLabel,
   List,
@@ -11,18 +10,20 @@ import {
   Stack,
   Typography,
   CircularProgress,
-  Box,
   Alert,
+  Chip,
+  Divider,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import { uniqueId } from 'lodash';
 import * as React from 'react';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useGetQuestionsQuery } from 'src/slices/examApiSlice';
+import { IconCamera, IconMaximize, IconCheck, IconAlertCircle } from '@tabler/icons-react';
 
 function Copyright(props) {
   return (
@@ -41,40 +42,117 @@ const DescriptionAndInstructions = () => {
   const navigate = useNavigate();
 
   const { examId } = useParams();
-  const { data: questions, isLoading, isError, error } = useGetQuestionsQuery(examId); // Fetch questions using examId
-  // const { data: questions, isLoading } = useGetQuestionsQuery({ examId });
-
-  // fech exam data from backend
-  // pass testUnique id on start button
+  const { data: questions, isLoading, isError, error } = useGetQuestionsQuery(examId);
+  
   const testId = uniqueId();
-  // accetp
   const [certify, setCertify] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [cameraStream, setCameraStream] = useState(null);
+  const [cameraError, setCameraError] = useState(null);
+  const videoRef = useRef(null);
+
+  // Request camera access on component mount
+  useEffect(() => {
+    requestCameraAccess();
+    
+    // Request fullscreen
+    const requestFullscreen = async () => {
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+          setIsFullscreen(true);
+        }
+      } catch (err) {
+        console.error('Fullscreen request failed:', err);
+        toast.warning('Please enable fullscreen for the test');
+      }
+    };
+
+    requestFullscreen();
+
+    // Listen for fullscreen changes
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      // Stop camera stream on unmount
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  // Update video element when stream changes
+  useEffect(() => {
+    if (videoRef.current && cameraStream) {
+      videoRef.current.srcObject = cameraStream;
+    }
+  }, [cameraStream]);
+
+  const requestCameraAccess = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: true, 
+        audio: false 
+      });
+      setCameraStream(stream);
+      setCameraError(null);
+      toast.success('Camera access granted');
+    } catch (err) {
+      console.error('Camera access error:', err);
+      setCameraError(err.message);
+      toast.error('Camera access denied. Please allow camera access to continue.');
+    }
+  };
+
   const handleCertifyChange = () => {
     setCertify(!certify);
   };
+
   const handleTest = () => {
-    // Check if the test date is valid here
-    const isValid = true; // Replace with your date validation logic
+    if (!isFullscreen) {
+      toast.error('Please enable fullscreen mode to start the test');
+      return;
+    }
+    
+    if (!cameraStream) {
+      toast.error('Camera access is required to start the test');
+      return;
+    }
+
+    const isValid = true;
     console.log('Test link');
     if (isValid) {
-      // Replace 'examid' and 'TestId' with the actual values
       navigate(`/exam/${examId}/${testId}`);
     } else {
-      // Display an error message or handle invalid date
       toast.error('Test date is not valid.');
     }
   };
 
+  const retryFullscreen = async () => {
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+        setIsFullscreen(true);
+      }
+    } catch (err) {
+      console.error('Fullscreen request failed:', err);
+      toast.error('Failed to enable fullscreen');
+    }
+  };
+
+  const canStartTest = certify && isFullscreen && cameraStream;
+
   // Handle loading state
   if (isLoading) {
     return (
-      <Card>
-        <CardContent>
-          <Box display="flex" justifyContent="center" alignItems="center" minHeight="300px">
-            <CircularProgress />
-          </Box>
-        </CardContent>
-      </Card>
+      <Box sx={{ height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <CircularProgress />
+      </Box>
     );
   }
 
@@ -84,8 +162,8 @@ const DescriptionAndInstructions = () => {
     const isNotAuthorized = error?.status === 403;
 
     return (
-      <Card>
-        <CardContent>
+      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
           <Alert 
             severity="error" 
             sx={{ mb: 2 }}
@@ -105,14 +183,125 @@ const DescriptionAndInstructions = () => {
               }
             </Typography>
           </Alert>
-        </CardContent>
-      </Card>
+        </Box>
+      </Box>
     );
   }
 
   return (
-    <Card>
-      <CardContent>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
+        {/* Permissions Status Banner */}
+        <Paper 
+          elevation={2} 
+          sx={{ 
+            p: 2, 
+            mb: 3, 
+            bgcolor: canStartTest ? 'success.lighter' : 'warning.lighter',
+            border: '1px solid',
+            borderColor: canStartTest ? 'success.main' : 'warning.main',
+          }}
+        >
+          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <IconAlertCircle size={24} />
+            Pre-Test Requirements
+          </Typography>
+          <Stack direction="row" spacing={2} flexWrap="wrap" mt={1}>
+            <Chip 
+              icon={isFullscreen ? <IconCheck size={18} /> : <IconMaximize size={18} />}
+              label="Fullscreen Mode"
+              color={isFullscreen ? 'success' : 'warning'}
+              variant={isFullscreen ? 'filled' : 'outlined'}
+              onClick={!isFullscreen ? retryFullscreen : undefined}
+              sx={{ cursor: !isFullscreen ? 'pointer' : 'default' }}
+            />
+            <Chip 
+              icon={cameraStream ? <IconCheck size={18} /> : <IconCamera size={18} />}
+              label="Camera Access"
+              color={cameraStream ? 'success' : 'warning'}
+              variant={cameraStream ? 'filled' : 'outlined'}
+              onClick={!cameraStream ? requestCameraAccess : undefined}
+              sx={{ cursor: !cameraStream ? 'pointer' : 'default' }}
+            />
+            <Chip 
+              icon={certify ? <IconCheck size={18} /> : <IconAlertCircle size={18} />}
+              label="Agreement Certified"
+              color={certify ? 'success' : 'default'}
+              variant={certify ? 'filled' : 'outlined'}
+            />
+          </Stack>
+          {!canStartTest && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              Please complete all requirements above before starting the test. Click on the chips to retry if needed.
+            </Alert>
+          )}
+        </Paper>
+
+        {/* Camera Preview */}
+        {cameraStream && (
+          <Paper elevation={2} sx={{ p: 2, mb: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              Camera Preview
+            </Typography>
+            <Box sx={{ 
+              position: 'relative', 
+              width: '100%', 
+              maxWidth: '400px',
+              margin: '0 auto',
+              borderRadius: 2,
+              overflow: 'hidden',
+              bgcolor: 'black'
+            }}>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{ 
+                  width: '100%', 
+                  display: 'block',
+                  borderRadius: '8px'
+                }}
+              />
+              <Chip 
+                label="Live"
+                color="error"
+                size="small"
+                sx={{ 
+                  position: 'absolute', 
+                  top: 10, 
+                  right: 10,
+                  fontWeight: 600
+                }}
+              />
+            </Box>
+            <Typography variant="caption" color="text.secondary" display="block" textAlign="center" mt={1}>
+              Your camera feed during the test. This is for proctoring purposes.
+            </Typography>
+          </Paper>
+        )}
+
+        {cameraError && (
+          <Alert 
+            severity="error" 
+            sx={{ mb: 3 }}
+            action={
+              <Button color="inherit" size="small" onClick={requestCameraAccess}>
+                Retry
+              </Button>
+            }
+          >
+            <Typography variant="subtitle2" gutterBottom>
+              Camera Access Failed
+            </Typography>
+            <Typography variant="body2">
+              {cameraError}
+            </Typography>
+          </Alert>
+        )}
+
+        <Divider sx={{ my: 3 }} />
+
         <Typography variant="h2" mb={3}>
           Description
         </Typography>
@@ -222,13 +411,25 @@ const DescriptionAndInstructions = () => {
             label="I certify that I have carefully read and agree to all of the instructions mentioned above"
           />
           <div style={{ display: 'flex', padding: '2px', margin: '10px' }}>
-            <Button variant="contained" color="primary" disabled={!certify} onClick={handleTest}>
+            <Button 
+              variant="contained" 
+              color="primary" 
+              disabled={!canStartTest} 
+              onClick={handleTest}
+              size="large"
+              sx={{ px: 4 }}
+            >
               Start Test
             </Button>
           </div>
+          {!canStartTest && (
+            <Typography variant="caption" color="text.secondary" textAlign="center">
+              Complete all requirements above to enable the Start Test button
+            </Typography>
+          )}
         </Stack>
-      </CardContent>
-    </Card>
+      </Box>
+    </Box>
   );
 };
 
@@ -238,7 +439,7 @@ const imgUrl =
 export default function ExamDetails() {
   return (
     <>
-      <Grid container sx={{ height: '100vh' }}>
+      <Grid container sx={{ height: '93vh' }}>
         <Grid
           item
           xs={false}
@@ -253,7 +454,19 @@ export default function ExamDetails() {
             backgroundPosition: 'center',
           }}
         />
-        <Grid item xs={12} sm={8} md={5} component={Paper} elevation={6} square>
+        <Grid 
+          item 
+          xs={12} 
+          sm={8} 
+          md={5} 
+          component={Paper} 
+          elevation={6} 
+          square
+          sx={{
+            height: '100%',
+            overflow: 'hidden',
+          }}
+        >
           <DescriptionAndInstructions />
         </Grid>
       </Grid>
