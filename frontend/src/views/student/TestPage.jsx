@@ -35,6 +35,7 @@ import { useSelector } from 'react-redux';
 import { toast } from 'react-toastify';
 import { useCheatingLog } from 'src/context/CheatingLogContext';
 import useBrowserLockdown from 'src/hooks/useBrowserLockdown';
+import useEyeGazeTracking from 'src/hooks/useEyeGazeTracking';
 import WebCam from './Components/WebCam';
 import axiosInstance from '../../axios';
 
@@ -48,6 +49,7 @@ const TestPage = () => {
   const [saveCheatingLogMutation] = useSaveCheatingLogMutation();
   const [saveResult] = useSaveResultMutation();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const webcamRef = useRef(null);
 
   // New state for improved UI
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -64,6 +66,7 @@ const TestPage = () => {
     violation: 0,
     tabSwitch: 0,
     windowBlur: 0,
+    gaze: 0,
   });
 
   const NOTIFICATION_THROTTLE_MS = 5000; // Show notification at most once every 5 seconds
@@ -101,6 +104,26 @@ const TestPage = () => {
     },
   });
 
+  // Eye gaze tracking for proctoring
+  const { isInitialized: isGazeTrackerInitialized } = useEyeGazeTracking({
+    enabled: true,
+    webcamRef: webcamRef,
+    gazeThreshold: 0.3, // Adjust sensitivity (0.2-0.4 recommended)
+    detectionInterval: 1000, // Check every 1 second
+    onGazeViolation: (gazeInfo) => {
+      console.log('👀 Gaze violation detected:', gazeInfo);
+      updateCheatingLog({ gazeViolationCount: (cheatingLog.gazeViolationCount || 0) + 1 });
+      
+      const directionText = gazeInfo.direction.horizontal !== 'center' 
+        ? `looking ${gazeInfo.direction.horizontal}`
+        : gazeInfo.direction.vertical !== 'center' 
+        ? `looking ${gazeInfo.direction.vertical}`
+        : 'looking away';
+      
+      showThrottledNotification('gaze', `Eye gaze violation: ${directionText}!`, 'warning');
+    },
+  });
+
   // Save initial cheating log when exam starts
   useEffect(() => {
     if (!examId || !userInfo) return;
@@ -119,6 +142,7 @@ const TestPage = () => {
           browserLockdownViolations: 0,
           tabSwitchViolations: 0,
           windowBlurViolations: 0,
+          gazeViolationCount: 0,
         };
 
         await saveCheatingLogMutation(initialLog).unwrap();
@@ -151,6 +175,7 @@ const TestPage = () => {
           browserLockdownViolations: cheatingLog.browserLockdownViolations || 0,
           tabSwitchViolations: cheatingLog.tabSwitchViolations || 0,
           windowBlurViolations: cheatingLog.windowBlurViolations || 0,
+          gazeViolationCount: cheatingLog.gazeViolationCount || 0,
         };
 
         await saveCheatingLogMutation(logData).unwrap();
@@ -347,6 +372,7 @@ const TestPage = () => {
         browserLockdownViolations: cheatingLog.browserLockdownViolations || 0,
         tabSwitchViolations: cheatingLog.tabSwitchViolations || 0,
         windowBlurViolations: cheatingLog.windowBlurViolations || 0,
+        gazeViolationCount: cheatingLog.gazeViolationCount || 0,
       };
 
       await saveCheatingLogMutation(finalLog).unwrap();
@@ -762,7 +788,11 @@ const TestPage = () => {
                   AI Proctoring
                 </Typography>
                 <Paper elevation={2} sx={{ overflow: 'hidden', borderRadius: 2 }}>
-                  <WebCam cheatingLog={cheatingLog} updateCheatingLog={updateCheatingLog} />
+                  <WebCam 
+                    cheatingLog={cheatingLog} 
+                    updateCheatingLog={updateCheatingLog}
+                    webcamRef={webcamRef}
+                  />
                 </Paper>
                 <Typography variant="caption" color="text.secondary" display="block" mt={1}>
                   Your exam is being monitored for security

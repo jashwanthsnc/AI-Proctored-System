@@ -9,8 +9,9 @@ import { UploadClient } from '@uploadcare/upload-client';
 
 const client = new UploadClient({ publicKey: 'e69ab6e5db6d4a41760b' });
 
-export default function Home({ cheatingLog, updateCheatingLog }) {
-  const webcamRef = useRef(null);
+export default function Home({ cheatingLog, updateCheatingLog, webcamRef: externalWebcamRef }) {
+  const internalWebcamRef = useRef(null);
+  const webcamRef = externalWebcamRef || internalWebcamRef; // Use external ref if provided
   const canvasRef = useRef(null);
   const [lastDetectionTime, setLastDetectionTime] = useState({});
   const lastGlobalWarningTimeRef = useRef(0);  // Use ref for synchronous updates

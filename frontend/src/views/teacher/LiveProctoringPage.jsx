@@ -147,6 +147,8 @@ const LiveProctoringPage = () => {
         return <IconFocusCentered size={16} />;
       case 'browserLockdown':
         return <IconBrowserCheck size={16} />;
+      case 'gaze':  // ← ADD THIS CASE
+        return <IconEye size={16} />;
       default:
         return <IconAlertTriangle size={16} />;
     }
@@ -375,6 +377,7 @@ const LiveProctoringPage = () => {
                     <TableCell align="center">Tab Switch</TableCell>
                     <TableCell align="center">Window Blur</TableCell>
                     <TableCell align="center">Browser Lock</TableCell>
+                    <TableCell align="center">Eye Gaze</TableCell>
                     <TableCell align="center">Total</TableCell>
                     <TableCell>Last Violation</TableCell>
                   </TableRow>
@@ -449,6 +452,14 @@ const LiveProctoringPage = () => {
                           color={getViolationColor(violation.browserLockdownViolations || 0)}
                           size="small"
                           icon={getViolationIcon('browserLockdown')}
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        <Chip
+                          label={violation.gazeViolationCount || 0}
+                          color={getViolationColor(violation.gazeViolationCount || 0)}
+                          size="small"
+                          icon={getViolationIcon('gaze')}
                         />
                       </TableCell>
                       <TableCell align="center">

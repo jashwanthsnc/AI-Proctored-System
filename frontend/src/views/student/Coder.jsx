@@ -53,6 +53,7 @@ import { toast } from 'react-toastify';
 import { useNavigate, useParams } from 'react-router';
 import { useCheatingLog } from 'src/context/CheatingLogContext';
 import useBrowserLockdown from 'src/hooks/useBrowserLockdown';
+import useEyeGazeTracking from 'src/hooks/useEyeGazeTracking';
 
 // Tab Panel Component
 function TabPanel({ children, value, index }) {
@@ -77,6 +78,7 @@ export default function Coder() {
   const [consoleTab, setConsoleTab] = useState(0);
   const [sidebarTab, setSidebarTab] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
+  const webcamRef = useRef(null);
   
   const { examId } = useParams();
   const navigate = useNavigate();
@@ -90,6 +92,7 @@ export default function Coder() {
     violation: 0,
     tabSwitch: 0,
     windowBlur: 0,
+    gaze: 0,
   });
 
   const NOTIFICATION_THROTTLE_MS = 5000; // Show notification at most once every 5 seconds
@@ -124,6 +127,26 @@ export default function Coder() {
       console.log('⚠️ Window blur detected:', event);
       updateCheatingLog({ windowBlurViolations: (cheatingLog.windowBlurViolations || 0) + 1 });
       showThrottledNotification('windowBlur', 'Window focus lost!', 'warning');
+    },
+  });
+
+  // Eye gaze tracking for proctoring
+  const { isInitialized: isGazeTrackerInitialized } = useEyeGazeTracking({
+    enabled: true,
+    webcamRef: webcamRef,
+    gazeThreshold: 0.3, // Adjust sensitivity (0.2-0.4 recommended)
+    detectionInterval: 1000, // Check every 1 second
+    onGazeViolation: (gazeInfo) => {
+      console.log('👀 Gaze violation detected:', gazeInfo);
+      updateCheatingLog({ gazeViolationCount: (cheatingLog.gazeViolationCount || 0) + 1 });
+      
+      const directionText = gazeInfo.direction.horizontal !== 'center' 
+        ? `looking ${gazeInfo.direction.horizontal}`
+        : gazeInfo.direction.vertical !== 'center' 
+        ? `looking ${gazeInfo.direction.vertical}`
+        : 'looking away';
+      
+      showThrottledNotification('gaze', `Eye gaze violation: ${directionText}!`, 'warning');
     },
   });
 
@@ -162,6 +185,7 @@ export default function Coder() {
           browserLockdownViolations: 0,
           tabSwitchViolations: 0,
           windowBlurViolations: 0,
+          gazeViolationCount: 0,
         };
 
         await saveCheatingLogMutation(initialLog).unwrap();
@@ -194,6 +218,7 @@ export default function Coder() {
           browserLockdownViolations: cheatingLog.browserLockdownViolations || 0,
           tabSwitchViolations: cheatingLog.tabSwitchViolations || 0,
           windowBlurViolations: cheatingLog.windowBlurViolations || 0,
+          gazeViolationCount: cheatingLog.gazeViolationCount || 0,
         };
 
         await saveCheatingLogMutation(logData).unwrap();
@@ -487,6 +512,7 @@ export default function Coder() {
             browserLockdownViolations: cheatingLog.browserLockdownViolations || 0,
             tabSwitchViolations: cheatingLog.tabSwitchViolations || 0,
             windowBlurViolations: cheatingLog.windowBlurViolations || 0,
+            gazeViolationCount: cheatingLog.gazeViolationCount || 0,
           };
 
           await saveCheatingLogMutation(finalLog).unwrap();
@@ -1131,6 +1157,7 @@ export default function Coder() {
                         style={{ width: '100%', height: '200px', objectFit: 'cover' }}
                         cheatingLog={cheatingLog}
                         updateCheatingLog={updateCheatingLog}
+                        webcamRef={webcamRef}
                       />
                     </Paper>
                     <Typography variant="caption" color="text.secondary" display="block" mt={1}>
