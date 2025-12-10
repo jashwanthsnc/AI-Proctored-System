@@ -32,7 +32,8 @@ const saveCheatingLog = asyncHandler(async (req, res) => {
       prohibitedObjectCount,
       browserLockdownViolations,
       tabSwitchViolations,
-      windowBlurViolations
+      windowBlurViolations,
+      gazeViolationCount
     },
     screenshotCount: screenshots?.length || 0
   });
@@ -55,6 +56,7 @@ const saveCheatingLog = asyncHandler(async (req, res) => {
         browserLockdownViolations: parseInt(browserLockdownViolations) || 0,
         tabSwitchViolations: parseInt(tabSwitchViolations) || 0,
         windowBlurViolations: parseInt(windowBlurViolations) || 0,
+        gazeViolationCount: parseInt(gazeViolationCount) || 0,
       },
       $push: {
         screenshots: { $each: screenshots || [] }
@@ -81,7 +83,8 @@ const saveCheatingLog = asyncHandler(async (req, res) => {
       prohibited: savedLog.prohibitedObjectCount,
       browserLockdown: savedLog.browserLockdownViolations,
       tabSwitch: savedLog.tabSwitchViolations,
-      windowBlur: savedLog.windowBlurViolations
+      windowBlur: savedLog.windowBlurViolations,
+      gaze: savedLog.gazeViolationCount
     }
   });
 
@@ -239,7 +242,8 @@ const getRecentViolations = asyncHandler(async (req, res) => {
         { prohibitedObjectCount: { $gt: 0 } },
         { browserLockdownViolations: { $gt: 0 } },
         { tabSwitchViolations: { $gt: 0 } },
-        { windowBlurViolations: { $gt: 0 } }
+        { windowBlurViolations: { $gt: 0 } },
+        { gazeViolationCount: { $gt: 0 } }
       ]
     })
     .sort({ updatedAt: -1 })
@@ -249,7 +253,7 @@ const getRecentViolations = asyncHandler(async (req, res) => {
     recentViolations.forEach((log, index) => {
       console.log(`  ${index + 1}. ${log.username} (${log.email}) - Updated: ${log.updatedAt}`);
       console.log(`     No Face: ${log.noFaceCount}, Multiple: ${log.multipleFaceCount}, Phone: ${log.cellPhoneCount}, Prohibited: ${log.prohibitedObjectCount}`);
-      console.log(`     Tab Switch: ${log.tabSwitchViolations || 0}, Window Blur: ${log.windowBlurViolations || 0}, Browser Lock: ${log.browserLockdownViolations || 0}`);
+      console.log(`     Tab Switch: ${log.tabSwitchViolations || 0}, Window Blur: ${log.windowBlurViolations || 0}, Browser Lock: ${log.browserLockdownViolations || 0}, Gaze: ${log.gazeViolationCount || 0}`);
     });
 
     // Enrich with exam names
@@ -269,6 +273,7 @@ const getRecentViolations = asyncHandler(async (req, res) => {
           browserLockdownViolations: log.browserLockdownViolations || 0,
           tabSwitchViolations: log.tabSwitchViolations || 0,
           windowBlurViolations: log.windowBlurViolations || 0,
+          gazeViolationCount: log.gazeViolationCount || 0,
           totalViolations: 
             log.noFaceCount + 
             log.multipleFaceCount + 
@@ -276,7 +281,8 @@ const getRecentViolations = asyncHandler(async (req, res) => {
             log.prohibitedObjectCount +
             (log.browserLockdownViolations || 0) +
             (log.tabSwitchViolations || 0) +
-            (log.windowBlurViolations || 0),
+            (log.windowBlurViolations || 0) +
+            (log.gazeViolationCount || 0),
           screenshots: log.screenshots,
           lastViolation: log.updatedAt,
           createdAt: log.createdAt
@@ -332,7 +338,8 @@ const getProctoringStats = asyncHandler(async (req, res) => {
           totalNoFace: { $sum: '$noFaceCount' },
           totalMultipleFace: { $sum: '$multipleFaceCount' },
           totalCellPhone: { $sum: '$cellPhoneCount' },
-          totalProhibitedObject: { $sum: '$prohibitedObjectCount' }
+          totalProhibitedObject: { $sum: '$prohibitedObjectCount' },
+          totalGaze: { $sum: '$gazeViolationCount' }
         }
       }
     ]);
@@ -341,7 +348,8 @@ const getProctoringStats = asyncHandler(async (req, res) => {
       totalNoFace: 0,
       totalMultipleFace: 0,
       totalCellPhone: 0,
-      totalProhibitedObject: 0
+      totalProhibitedObject: 0,
+      totalGaze: 0
     };
 
     res.status(200).json({
@@ -353,8 +361,10 @@ const getProctoringStats = asyncHandler(async (req, res) => {
         multipleFace: violationStats.totalMultipleFace,
         cellPhone: violationStats.totalCellPhone,
         prohibitedObject: violationStats.totalProhibitedObject,
+        gaze: violationStats.totalGaze,
         total: violationStats.totalNoFace + violationStats.totalMultipleFace + 
-               violationStats.totalCellPhone + violationStats.totalProhibitedObject
+               violationStats.totalCellPhone + violationStats.totalProhibitedObject +
+               violationStats.totalGaze
       }
     });
   } catch (error) {
