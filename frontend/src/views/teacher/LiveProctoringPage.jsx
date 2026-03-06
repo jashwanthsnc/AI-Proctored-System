@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Grid,
@@ -40,7 +40,9 @@ import {
   IconBrowserCheck,
   IconLayoutColumns,
   IconFocusCentered,
+  IconDeviceDesktop,
 } from '@tabler/icons-react';
+import { useDispatch } from 'react-redux';
 import PageContainer from 'src/components/container/PageContainer';
 import DashboardCard from 'src/components/shared/DashboardCard';
 import {
@@ -48,22 +50,62 @@ import {
   useGetRecentViolationsQuery,
   useGetProctoringStatsQuery,
 } from 'src/slices/cheatingLogApiSlice';
+import { apiSlice } from 'src/slices/apiSlice';
+import useSocket from 'src/hooks/useSocket';
 
 const LiveProctoringPage = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [lastViolationCount, setLastViolationCount] = useState(0);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
+  const [socketConnected, setSocketConnected] = useState(false);
+  const [socketActiveStudents, setSocketActiveStudents] = useState(null);
 
-  // Fetch data with auto-refresh every 10 seconds
+  const dispatch = useDispatch();
+
+  // Handle real-time socket updates from student cheating logs
+  const handleProctoringUpdate = useCallback((data) => {
+    console.log("Proctoring update received:", data);
+    dispatch(
+      apiSlice.util.invalidateTags([
+        "ActiveStudents",
+        "RecentViolations",
+        "ProctoringStats",
+      ])
+    );
+  }, [dispatch]);
+
+  // Handle real-time active student list from socket
+  const handleActiveStudentList = useCallback((students) => {
+    console.log("Active students update received:", students.length);
+    setSocketActiveStudents(students);
+  }, []);
+
+  // Connect to socket and listen for proctoring updates
+  useSocket({
+    "proctoring:update": handleProctoringUpdate,
+    "student:active-list": handleActiveStudentList,
+    "connect": () => setSocketConnected(true),
+    "disconnect": () => {
+      setSocketConnected(false);
+      setSocketActiveStudents(null); // Fall back to API data
+    },
+  });
+
+  // Fetch data with fallback polling every 60 seconds (real-time via socket)
   const {
-    data: activeStudents = [],
+    data: apiActiveStudents = [],
     isLoading: studentsLoading,
     error: studentsError,
     refetch: refetchStudents,
   } = useGetActiveStudentsQuery(undefined, {
-    pollingInterval: 10000, // Auto-refresh every 10 seconds
+    pollingInterval: 60000, // Fallback polling every 60 seconds
   });
+
+  // Use socket data when connected, fall back to API data
+  const activeStudents = socketConnected && socketActiveStudents !== null
+    ? socketActiveStudents
+    : apiActiveStudents;
 
   const {
     data: recentViolations = [],
@@ -71,7 +113,7 @@ const LiveProctoringPage = () => {
     error: violationsError,
     refetch: refetchViolations,
   } = useGetRecentViolationsQuery(undefined, {
-    pollingInterval: 10000, // Auto-refresh every 10 seconds
+    pollingInterval: 60000, // Fallback polling every 60 seconds
   });
 
   const {
@@ -80,7 +122,7 @@ const LiveProctoringPage = () => {
     error: statsError,
     refetch: refetchStats,
   } = useGetProctoringStatsQuery(undefined, {
-    pollingInterval: 10000, // Auto-refresh every 10 seconds
+    pollingInterval: 60000, // Fallback polling every 60 seconds
   });
 
   // Request browser notification permission
@@ -147,8 +189,10 @@ const LiveProctoringPage = () => {
         return <IconFocusCentered size={16} />;
       case 'browserLockdown':
         return <IconBrowserCheck size={16} />;
-      case 'gaze':  // ← ADD THIS CASE
+      case 'gaze':
         return <IconEye size={16} />;
+      case 'externalDisplay':
+        return <IconDeviceDesktop size={16} />;
       default:
         return <IconAlertTriangle size={16} />;
     }
@@ -167,6 +211,12 @@ const LiveProctoringPage = () => {
               color="error"
               size="small"
               icon={<Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'white', animation: 'pulse 1.5s infinite' }} />}
+            />
+            <Chip
+              label={socketConnected ? "Real-time" : "Polling"}
+              color={socketConnected ? "success" : "warning"}
+              size="small"
+              variant="outlined"
             />
           </Box>
           <Box display="flex" gap={1}>
@@ -378,6 +428,7 @@ const LiveProctoringPage = () => {
                     <TableCell align="center">Window Blur</TableCell>
                     <TableCell align="center">Browser Lock</TableCell>
                     <TableCell align="center">Eye Gaze</TableCell>
+                    <TableCell align="center">Ext. Display</TableCell>
                     <TableCell align="center">Total</TableCell>
                     <TableCell>Last Violation</TableCell>
                   </TableRow>
@@ -460,6 +511,14 @@ const LiveProctoringPage = () => {
                           color={getViolationColor(violation.gazeViolationCount || 0)}
                           size="small"
                           icon={getViolationIcon('gaze')}
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        <Chip
+                          label={violation.externalDisplayCount || 0}
+                          color={getViolationColor(violation.externalDisplayCount || 0)}
+                          size="small"
+                          icon={getViolationIcon('externalDisplay')}
                         />
                       </TableCell>
                       <TableCell align="center">

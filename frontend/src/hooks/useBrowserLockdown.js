@@ -342,17 +342,8 @@ const useBrowserLockdown = ({
     document.addEventListener('mozfullscreenchange', handleFullscreenChange);
     document.addEventListener('MSFullscreenChange', handleFullscreenChange);
 
-    // Enter fullscreen on mount if enforced
-    if (enforceFullscreen) {
-      const timer = setTimeout(() => {
-        enterFullscreen();
-      }, 500);
-      
-      return () => clearTimeout(timer);
-    }
-
     // === CLEANUP ON UNMOUNT ===
-    return () => {
+    const cleanup = () => {
       document.removeEventListener('contextmenu', handleContextMenu);
       document.removeEventListener('copy', handleCopy);
       document.removeEventListener('cut', handleCut);
@@ -367,6 +358,20 @@ const useBrowserLockdown = ({
       document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
       document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
     };
+
+    // Enter fullscreen on mount if enforced
+    if (enforceFullscreen) {
+      const timer = setTimeout(() => {
+        enterFullscreen();
+      }, 500);
+
+      return () => {
+        clearTimeout(timer);
+        cleanup();
+      };
+    }
+
+    return cleanup;
   }, [
     enabled,
     enforceFullscreen,

@@ -23,7 +23,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useGetQuestionsQuery } from 'src/slices/examApiSlice';
-import { IconCamera, IconMaximize, IconCheck, IconAlertCircle } from '@tabler/icons-react';
+import { IconCamera, IconMaximize, IconCheck, IconAlertCircle, IconDeviceDesktop } from '@tabler/icons-react';
 
 function Copyright(props) {
   return (
@@ -49,6 +49,7 @@ const DescriptionAndInstructions = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [cameraStream, setCameraStream] = useState(null);
   const [cameraError, setCameraError] = useState(null);
+  const [screenPermission, setScreenPermission] = useState(false);
   const videoRef = useRef(null);
 
   // Request camera access on component mount
@@ -109,6 +110,22 @@ const DescriptionAndInstructions = () => {
     }
   };
 
+  const requestScreenPermission = async () => {
+    if (!('getScreenDetails' in window)) {
+      // API not supported — skip silently, detection hook will use fallbacks
+      setScreenPermission(true);
+      return;
+    }
+    try {
+      await window.getScreenDetails();
+      setScreenPermission(true);
+      toast.success('Screen monitoring permission granted');
+    } catch (err) {
+      console.error('Screen permission error:', err);
+      toast.error('Screen monitoring permission denied. Please allow to continue.');
+    }
+  };
+
   const handleCertifyChange = () => {
     setCertify(!certify);
   };
@@ -145,7 +162,7 @@ const DescriptionAndInstructions = () => {
     }
   };
 
-  const canStartTest = certify && isFullscreen && cameraStream;
+  const canStartTest = certify && isFullscreen && cameraStream && screenPermission;
 
   // Handle loading state
   if (isLoading) {
@@ -215,7 +232,7 @@ const DescriptionAndInstructions = () => {
               onClick={!isFullscreen ? retryFullscreen : undefined}
               sx={{ cursor: !isFullscreen ? 'pointer' : 'default' }}
             />
-            <Chip 
+            <Chip
               icon={cameraStream ? <IconCheck size={18} /> : <IconCamera size={18} />}
               label="Camera Access"
               color={cameraStream ? 'success' : 'warning'}
@@ -223,7 +240,15 @@ const DescriptionAndInstructions = () => {
               onClick={!cameraStream ? requestCameraAccess : undefined}
               sx={{ cursor: !cameraStream ? 'pointer' : 'default' }}
             />
-            <Chip 
+            <Chip
+              icon={screenPermission ? <IconCheck size={18} /> : <IconDeviceDesktop size={18} />}
+              label="Screen Monitoring"
+              color={screenPermission ? 'success' : 'warning'}
+              variant={screenPermission ? 'filled' : 'outlined'}
+              onClick={!screenPermission ? requestScreenPermission : undefined}
+              sx={{ cursor: !screenPermission ? 'pointer' : 'default' }}
+            />
+            <Chip
               icon={certify ? <IconCheck size={18} /> : <IconAlertCircle size={18} />}
               label="Agreement Certified"
               color={certify ? 'success' : 'default'}

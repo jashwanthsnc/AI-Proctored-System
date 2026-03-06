@@ -134,7 +134,7 @@ export default function Coder() {
   const { isInitialized: isGazeTrackerInitialized } = useEyeGazeTracking({
     enabled: true,
     webcamRef: webcamRef,
-    gazeThreshold: 0.3, // Adjust sensitivity (0.2-0.4 recommended)
+    gazeThreshold: 0.15, // Adjust sensitivity (0.1-0.25 recommended for iris-based detection)
     detectionInterval: 1000, // Check every 1 second
     onGazeViolation: (gazeInfo) => {
       console.log('👀 Gaze violation detected:', gazeInfo);

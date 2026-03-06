@@ -199,6 +199,7 @@ export default function Home({ cheatingLog, updateCheatingLog, webcamRef: extern
           ref={webcamRef}
           audio={false}
           muted
+          mirrored
           screenshotFormat="image/jpeg"
           videoConstraints={{
             width: 640,

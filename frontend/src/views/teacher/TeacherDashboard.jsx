@@ -61,7 +61,7 @@ const TeacherDashboard = () => {
   };
 
   // Get recent exams (last 5)
-  const recentExams = exams
+  const recentExams = [...exams]
     .sort((a, b) => new Date(b.liveDate) - new Date(a.liveDate))
     .slice(0, 5);
 

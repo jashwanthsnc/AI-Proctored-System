@@ -165,13 +165,14 @@ export default function CheatingTable() {
                 <TableCell>Multiple Face Count</TableCell>
                 <TableCell>Cell Phone Count</TableCell>
                 <TableCell>Prohibited Object Count</TableCell>
+                <TableCell>Ext. Display</TableCell>
                 <TableCell>Screenshots</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {filteredUsers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center">
+                  <TableCell colSpan={9} align="center">
                     No cheating logs found for this exam
                   </TableCell>
                 </TableRow>
@@ -210,6 +211,14 @@ export default function CheatingTable() {
                         icon={getViolationIcon(log.prohibitedObjectCount)}
                         label={log.prohibitedObjectCount}
                         color={getViolationColor(log.prohibitedObjectCount)}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        icon={getViolationIcon(log.externalDisplayCount || 0)}
+                        label={log.externalDisplayCount || 0}
+                        color={getViolationColor(log.externalDisplayCount || 0)}
                         size="small"
                       />
                     </TableCell>

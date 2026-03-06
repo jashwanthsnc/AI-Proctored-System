@@ -36,8 +36,10 @@ import { toast } from 'react-toastify';
 import { useCheatingLog } from 'src/context/CheatingLogContext';
 import useBrowserLockdown from 'src/hooks/useBrowserLockdown';
 import useEyeGazeTracking from 'src/hooks/useEyeGazeTracking';
+import useExternalDisplayDetection from 'src/hooks/useExternalDisplayDetection';
 import WebCam from './Components/WebCam';
 import axiosInstance from '../../axios';
+import { connectSocket, disconnectSocket } from '../../utils/socket';
 
 const TestPage = () => {
   const { examId, testId } = useParams();
@@ -67,6 +69,7 @@ const TestPage = () => {
     tabSwitch: 0,
     windowBlur: 0,
     gaze: 0,
+    externalDisplay: 0,
   });
 
   const NOTIFICATION_THROTTLE_MS = 5000; // Show notification at most once every 5 seconds
@@ -108,7 +111,7 @@ const TestPage = () => {
   const { isInitialized: isGazeTrackerInitialized } = useEyeGazeTracking({
     enabled: true,
     webcamRef: webcamRef,
-    gazeThreshold: 0.3, // Adjust sensitivity (0.2-0.4 recommended)
+    gazeThreshold: 0.15, // Adjust sensitivity (0.1-0.25 recommended for iris-based detection)
     detectionInterval: 1000, // Check every 1 second
     onGazeViolation: (gazeInfo) => {
       console.log('👀 Gaze violation detected:', gazeInfo);
@@ -121,6 +124,17 @@ const TestPage = () => {
         : 'looking away';
       
       showThrottledNotification('gaze', `Eye gaze violation: ${directionText}!`, 'warning');
+    },
+  });
+
+  // External display detection
+  useExternalDisplayDetection({
+    enabled: true,
+    detectionInterval: 5000,
+    onViolation: (info) => {
+      console.log('🖥️ External display violation:', info);
+      updateCheatingLog({ externalDisplayCount: (cheatingLog.externalDisplayCount || 0) + 1 });
+      showThrottledNotification('externalDisplay', 'External display detected! Disconnect it to continue.', 'error');
     },
   });
 
@@ -143,6 +157,7 @@ const TestPage = () => {
           tabSwitchViolations: 0,
           windowBlurViolations: 0,
           gazeViolationCount: 0,
+          externalDisplayCount: 0,
         };
 
         await saveCheatingLogMutation(initialLog).unwrap();
@@ -154,6 +169,23 @@ const TestPage = () => {
 
     saveInitialLog();
   }, [examId, userInfo, saveCheatingLogMutation]);
+
+  // Connect to socket for real-time active student tracking
+  useEffect(() => {
+    if (!examId || !userInfo || !selectedExam) return;
+
+    const socket = connectSocket();
+    socket.emit("student:join-exam", {
+      examId,
+      email: userInfo.email,
+      username: userInfo.name,
+      examName: selectedExam.examName,
+    });
+
+    return () => {
+      disconnectSocket();
+    };
+  }, [examId, userInfo, selectedExam]);
 
   // Auto-save cheating log every 30 seconds
   useEffect(() => {
@@ -176,11 +208,12 @@ const TestPage = () => {
           tabSwitchViolations: cheatingLog.tabSwitchViolations || 0,
           windowBlurViolations: cheatingLog.windowBlurViolations || 0,
           gazeViolationCount: cheatingLog.gazeViolationCount || 0,
+          externalDisplayCount: cheatingLog.externalDisplayCount || 0,
         };
 
         await saveCheatingLogMutation(logData).unwrap();
         markScreenshotsAsSaved(unsavedScreenshots);
-        
+
         console.log('🔄 Auto-saved - Student still visible');
       } catch (error) {
         console.error('Error auto-saving cheating log:', error);
@@ -206,22 +239,28 @@ const TestPage = () => {
     }
   }, [userExamdata, examId]);
 
-  // Timer countdown
+  // Keep a stable ref to handleAutoSubmit so the timer closure never goes stale
+  const handleAutoSubmitRef = useRef(null);
+  handleAutoSubmitRef.current = () => {
+    toast.warning('Time is up! Submitting your test...');
+    handleSubmit();
+  };
+
+  // Timer countdown — single setTimeout chain instead of a new setInterval every second
   useEffect(() => {
     if (timeLeft <= 0) return;
 
-    const timer = setInterval(() => {
+    const timer = setTimeout(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          clearInterval(timer);
-          handleAutoSubmit();
+          handleAutoSubmitRef.current();
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
 
-    return () => clearInterval(timer);
+    return () => clearTimeout(timer);
   }, [timeLeft]);
 
   // Format time for display
@@ -324,12 +363,6 @@ const TestPage = () => {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [currentQuestion, questions]);
 
-  // Auto submit when time is up
-  const handleAutoSubmit = () => {
-    toast.warning('Time is up! Submitting your test...');
-    handleSubmit();
-  };
-
   // Handle test submission
   const handleSubmit = async () => {
     if (isSubmitting) return;
@@ -373,6 +406,7 @@ const TestPage = () => {
         tabSwitchViolations: cheatingLog.tabSwitchViolations || 0,
         windowBlurViolations: cheatingLog.windowBlurViolations || 0,
         gazeViolationCount: cheatingLog.gazeViolationCount || 0,
+        externalDisplayCount: cheatingLog.externalDisplayCount || 0,
       };
 
       await saveCheatingLogMutation(finalLog).unwrap();

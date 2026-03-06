@@ -13,7 +13,8 @@ export const CheatingLogProvider = ({ children }) => {
     browserLockdownViolations: 0,
     tabSwitchViolations: 0,
     windowBlurViolations: 0,
-    gazeViolationCount: 0,  // ← ADD THIS LINE
+    gazeViolationCount: 0,
+    externalDisplayCount: 0,
     examId: '',
     username: userInfo?.name || '',
     email: userInfo?.email || '',
@@ -70,6 +71,9 @@ export const CheatingLogProvider = ({ children }) => {
         gazeViolationCount: newLog.gazeViolationCount !== undefined
           ? Number(newLog.gazeViolationCount)
           : Number(prev.gazeViolationCount || 0),
+        externalDisplayCount: newLog.externalDisplayCount !== undefined
+          ? Number(newLog.externalDisplayCount)
+          : Number(prev.externalDisplayCount || 0),
         // Preserve or update screenshots array
         screenshots: newLog.screenshots !== undefined
           ? newLog.screenshots
@@ -94,6 +98,7 @@ export const CheatingLogProvider = ({ children }) => {
       tabSwitchViolations: 0,
       windowBlurViolations: 0,
       gazeViolationCount: 0,
+      externalDisplayCount: 0,
       examId: examId,
       username: userInfo?.name || '',
       email: userInfo?.email || '',
