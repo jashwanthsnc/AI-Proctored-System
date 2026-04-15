@@ -14,7 +14,7 @@ import {
 } from '@mui/material';
 import swal from 'sweetalert';
 import { v4 as uuidv4 } from 'uuid';
-import { useCreateQuestionMutation, useGetExamsQuery, useUpdateQuestionMutation } from 'src/slices/examApiSlice';
+import { useCreateQuestionMutation, useGetExamsQuery, useUpdateQuestionMutation, useGetQuestionsQuery } from 'src/slices/examApiSlice';
 import { toast } from 'react-toastify';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
@@ -35,9 +35,19 @@ const AddQuestionForm = ({ onSuccess, editingQuestion, selectedExamId: propSelec
   const [createQuestion, { isLoading: isCreating }] = useCreateQuestionMutation();
   const [updateQuestion, { isLoading: isUpdating }] = useUpdateQuestionMutation();
   const { data: examsData } = useGetExamsQuery();
+  const { data: existingQuestions } = useGetQuestionsQuery(
+    selectedExamId,
+    { skip: !selectedExamId || selectedExamId === 'all' }
+  );
 
   const isLoading = isCreating || isUpdating;
   const isEditMode = Boolean(editingQuestion);
+
+  // Limit helpers
+  const currentCount = existingQuestions?.length ?? 0;
+  const selectedExam = examsData?.find((e) => e.examId === selectedExamId);
+  const mcqLimit = selectedExam?.totalQuestions ?? 0;
+  const atLimit = !isEditMode && mcqLimit > 0 && currentCount >= mcqLimit;
 
   // Load editing question data
   useEffect(() => {
@@ -73,6 +83,11 @@ const AddQuestionForm = ({ onSuccess, editingQuestion, selectedExamId: propSelec
   }, [examsData, isEditMode, propSelectedExamId]);
 
   const handleAddOrUpdateQuestion = async () => {
+    if (atLimit) {
+      toast.error(`Question limit reached (${mcqLimit}). Delete a question first.`);
+      return;
+    }
+
     if (newQuestion.trim() === '' || newOptions.some((option) => option.trim() === '')) {
       swal('', 'Please fill out the question and all options.', 'error');
       return;
@@ -190,6 +205,14 @@ const AddQuestionForm = ({ onSuccess, editingQuestion, selectedExamId: propSelec
               </MenuItem>
             ))}
         </Select>
+      )}
+
+      {!isEditMode && selectedExamId && mcqLimit > 0 && (
+        <Alert severity={atLimit ? 'error' : 'info'} sx={{ mb: 2 }}>
+          {atLimit
+            ? `Question limit reached: ${currentCount} / ${mcqLimit} questions added. Delete a question first.`
+            : `${currentCount} / ${mcqLimit} questions added for this exam.`}
+        </Alert>
       )}
 
       {isEditMode && (
@@ -327,7 +350,7 @@ const AddQuestionForm = ({ onSuccess, editingQuestion, selectedExamId: propSelec
       ))}
 
       <Stack mt={2} direction="row" spacing={2}>
-        <Button variant="contained" onClick={handleAddOrUpdateQuestion} disabled={isLoading}>
+        <Button variant="contained" onClick={handleAddOrUpdateQuestion} disabled={isLoading || atLimit}>
           {isLoading ? (isEditMode ? 'Updating...' : 'Adding...') : (isEditMode ? 'Update Question' : 'Add Question')}
         </Button>
         {!isEditMode && (

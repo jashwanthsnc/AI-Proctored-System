@@ -8,6 +8,7 @@
   "dependencies": {
     "@emotion/react": "11.11.1",
     "@emotion/styled": "11.11.0",
+    "@mediapipe/face_detection": "^0.4.1646425229",
     "@mediapipe/face_mesh": "^0.4.1633559619",
     "@monaco-editor/react": "^4.6.0",
     "@mui/icons-material": "5.11.16",
@@ -25,6 +26,7 @@
     "@testing-library/react": "14.0.0",
     "@testing-library/user-event": "14.4.3",
     "@uploadcare/upload-client": "^6.14.3",
+    "ajv": "^8.18.0",
     "apexcharts": "3.41.0",
     "axios": "^1.7.9",
     "chance": "1.1.11",
@@ -100,5 +102,5 @@
   "overrides": {
     "nth-check": "2.1.1"
   },
-  "proxy": "http://192.168.56.1:5000/"
+  "proxy": "http://localhost:5000/"
 }

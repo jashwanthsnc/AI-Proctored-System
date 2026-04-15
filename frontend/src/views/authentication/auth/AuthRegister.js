@@ -1,171 +1,172 @@
-import React from 'react';
-import { Box, Typography, Button, Select, MenuItem } from '@mui/material';
-
+import React, { useState } from 'react';
+import { Box, Typography, Button, Select, MenuItem, IconButton, InputAdornment } from '@mui/material';
+import { IconEye, IconEyeOff } from '@tabler/icons-react';
 import CustomTextField from '../../../components/forms/theme-elements/CustomTextField';
 import { Stack } from '@mui/system';
 
-const AuthRegister = ({ formik, title, subtitle, subtext }) => {
+const inputSx = {
+  '& .MuiOutlinedInput-root': {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: '12px',
+    '& fieldset': { borderColor: 'rgba(255,255,255,0.12)' },
+    '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.22)' },
+    '&.Mui-focused fieldset': { borderColor: '#0A84FF', borderWidth: '2px' },
+    '& input': { color: '#FFFFFF', fontSize: '0.9375rem', letterSpacing: '-0.01em', padding: '13px 14px', fontFamily: 'Inter, sans-serif' },
+    '& input::placeholder': { color: 'rgba(235,235,245,0.25)', opacity: 1 },
+  },
+};
+
+const LabelText = ({ children, htmlFor }) => (
+  <Typography
+    component="label"
+    htmlFor={htmlFor}
+    sx={{ display: 'block', mb: '6px', fontSize: '0.8125rem', fontWeight: 500, color: 'rgba(235,235,245,0.5)', letterSpacing: '-0.005em', fontFamily: 'Inter, sans-serif' }}
+  >
+    {children}
+  </Typography>
+);
+
+const AuthRegister = ({ formik, subtitle }) => {
   const { values, errors, touched, handleBlur, handleChange, handleSubmit } = formik;
+  const [showPw, setShowPw] = useState(false);
+  const [showCf, setShowCf] = useState(false);
+
+  const eyeBtn = (show, toggle) => ({
+    endAdornment: (
+      <InputAdornment position="end">
+        <IconButton onClick={toggle} edge="end" size="small" sx={{ color: 'rgba(235,235,245,0.35)', mr: -0.5 }}>
+          {show ? <IconEyeOff size={16} /> : <IconEye size={16} />}
+        </IconButton>
+      </InputAdornment>
+    ),
+  });
+
+  const textFields = [
+    { label: 'Full Name', id: 'name', name: 'name', type: 'text', placeholder: 'John Doe' },
+    { label: 'Email', id: 'email', name: 'email', type: 'email', placeholder: 'you@example.com' },
+  ];
+
+  const roleFields = values.role === 'teacher'
+    ? [
+        { label: 'Institution / School', id: 'institution', name: 'institution', type: 'text', placeholder: 'University / Company' },
+        { label: 'Department', id: 'department', name: 'department', type: 'text', placeholder: 'e.g., Computer Science' },
+        { label: 'Phone (optional)', id: 'phone', name: 'phone', type: 'tel', placeholder: '+1 (555) 000-0000' },
+      ]
+    : values.role === 'student'
+    ? [
+        { label: 'Student / Roll ID', id: 'studentId', name: 'studentId', type: 'text', placeholder: 'e.g., CS2024001' },
+        { label: 'Institution / School', id: 'institution', name: 'institution', type: 'text', placeholder: 'University name' },
+        { label: 'Phone (optional)', id: 'phone', name: 'phone', type: 'tel', placeholder: '+1 (555) 000-0000' },
+      ]
+    : [];
+
   return (
-    <>
-      {title ? (
-        <Typography fontWeight="700" variant="h2" mb={1}>
-          {title}
-        </Typography>
-      ) : null}
+    <Box component="form">
+      <Stack spacing={2}>
+        {textFields.map((field) => (
+          <Box key={field.id}>
+            <LabelText htmlFor={field.id}>{field.label}</LabelText>
+            <CustomTextField
+              id={field.id}
+              name={field.name}
+              type={field.type}
+              placeholder={field.placeholder}
+              variant="outlined"
+              value={values[field.name]}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              error={!!(touched[field.name] && errors[field.name])}
+              helperText={touched[field.name] && errors[field.name]}
+              fullWidth
+              sx={inputSx}
+            />
+          </Box>
+        ))}
+        <Box>
+          <LabelText htmlFor="password">Password</LabelText>
+          <CustomTextField id="password" name="password" type={showPw ? 'text' : 'password'} placeholder="••••••••" variant="outlined" value={values.password} onChange={handleChange} onBlur={handleBlur} error={!!(touched.password && errors.password)} helperText={touched.password && errors.password} fullWidth sx={inputSx} InputProps={eyeBtn(showPw, () => setShowPw(!showPw))} />
+        </Box>
+        <Box>
+          <LabelText htmlFor="confirm_password">Confirm Password</LabelText>
+          <CustomTextField id="confirm_password" name="confirm_password" type={showCf ? 'text' : 'password'} placeholder="••••••••" variant="outlined" value={values.confirm_password} onChange={handleChange} onBlur={handleBlur} error={!!(touched.confirm_password && errors.confirm_password)} helperText={touched.confirm_password && errors.confirm_password} fullWidth sx={inputSx} InputProps={eyeBtn(showCf, () => setShowCf(!showCf))} />
+        </Box>
 
-      {subtext}
-
-      <Box component="form">
-        <Stack mb={1}>
-          <Typography
-            variant="subtitle1"
-            fontWeight={600}
-            component="label"
-            htmlFor="name"
-            mb="5px"
-          >
-            Name
-          </Typography>
-          <CustomTextField
-            id="name"
-            name="name"
-            placeholder="Enter Your Name "
-            variant="outlined"
-            value={values.name}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            error={touched.name && errors.name ? true : false}
-            helperText={touched.name && errors.name ? errors.name : null}
-            // onChange={onNameChange} // Call the callback function on change
-            fullWidth
-            required
-            //   size="small"
-          />
-
-          <Typography
-            variant="subtitle1"
-            fontWeight={600}
-            component="label"
-            htmlFor="email"
-            mb="5px"
-            mt="10px"
-          >
-            Email Address
-          </Typography>
-          <CustomTextField
-            id="email"
-            name="email"
-            variant="outlined"
-            placeholder="Enter Your Email"
-            value={values.email}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            error={touched.email && errors.email ? true : false}
-            helperText={touched.email && errors.email ? errors.email : null}
-            required
-            fullWidth
-            // onChange={onEmailChange} // Call the callback function on change
-            //   size="small"
-          />
-
-          <Typography
-            variant="subtitle1"
-            fontWeight={600}
-            component="label"
-            htmlFor="password"
-            mb="5px"
-            mt="10px"
-          >
-            Password
-          </Typography>
-          <CustomTextField
-            id="password"
-            name="password"
-            type="password"
-            variant="outlined"
-            value={values.password}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            error={touched.password && errors.password ? true : false}
-            helperText={touched.password && errors.password ? errors.password : null}
-            required
-            fullWidth
-            // onChange={onPasswordChange} // Call the callback function on change
-            //   size="small"
-          />
-          <Typography
-            variant="subtitle1"
-            fontWeight={600}
-            component="label"
-            htmlFor="confirm_password"
-            mb="5px"
-            mt="10px"
-          >
-            Confirm Password
-          </Typography>
-          <CustomTextField
-            id="confirm_password"
-            name="confirm_password"
-            type="password"
-            autoComplete="false"
-            variant="outlined"
-            value={values.confirm_password}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            error={touched.confirm_password && errors.confirm_password ? true : false}
-            helperText={
-              touched.confirm_password && errors.confirm_password ? errors.confirm_password : null
-            }
-            fullWidth
-            required
-            // onChange={onConfirmPasswordChange} // Call the callback function on change
-            //   size="small"
-          />
-          <Typography
-            variant="subtitle1"
-            fontWeight={600}
-            component="label"
-            htmlFor="role"
-            mb="5px"
-            mt="10px"
-          >
-            Role
-          </Typography>
+        <Box>
+          <LabelText htmlFor="role">I am a</LabelText>
           <Select
             id="role"
             name="role"
-            required
-            displayEmpty
+            fullWidth
             value={values.role}
             onChange={handleChange}
             onBlur={handleBlur}
             error={!!(touched.role && errors.role)}
-            // value={userRole}
-            // onChange={onRoleChange} // Call the callback function on change
-            // inputProps={{ 'aria-label': 'Without label' }}
-            //   size="small"
+            sx={{
+              borderRadius: '12px',
+              backgroundColor: 'rgba(255,255,255,0.06)',
+              color: '#FFFFFF',
+              fontSize: '0.9375rem',
+              letterSpacing: '-0.01em',
+              fontFamily: 'Inter, sans-serif',
+              '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.12)' },
+              '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.22)' },
+              '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#0A84FF', borderWidth: '2px' },
+              '& .MuiSvgIcon-root': { color: 'rgba(235,235,245,0.4)' },
+              '& .MuiSelect-select': { padding: '13px 14px' },
+            }}
           >
             <MenuItem value="student">Student</MenuItem>
-            <MenuItem value="teacher">Teacher</MenuItem>
+            <MenuItem value="teacher">Teacher / Instructor</MenuItem>
           </Select>
-        </Stack>
+        </Box>
+
+        {roleFields.map((field) => (
+          <Box key={field.id}>
+            <LabelText htmlFor={field.id}>{field.label}</LabelText>
+            <CustomTextField
+              id={field.id}
+              name={field.name}
+              type={field.type}
+              placeholder={field.placeholder}
+              variant="outlined"
+              value={values[field.name] || ''}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              error={!!(touched[field.name] && errors[field.name])}
+              helperText={touched[field.name] && errors[field.name]}
+              fullWidth
+              sx={inputSx}
+            />
+          </Box>
+        ))}
+
         <Button
-          // size="small"
-          color="primary"
           variant="contained"
+          color="primary"
           size="large"
           fullWidth
-          // component={Link}
-          // to="/auth/login"
           onClick={handleSubmit}
-          // onClick={onSubmit} // Call the callback function on button click
+          sx={{
+            borderRadius: '12px',
+            py: 1.5,
+            fontWeight: 600,
+            fontSize: '0.9375rem',
+            letterSpacing: '-0.01em',
+            background: '#0A84FF',
+            boxShadow: '0 4px 16px rgba(10,132,255,0.4)',
+            mt: 0.5,
+            '&:hover': {
+              background: '#409CFF',
+              boxShadow: '0 6px 20px rgba(10,132,255,0.5)',
+            },
+          }}
         >
-          Sign Up
+          Create Account
         </Button>
-      </Box>
+      </Stack>
       {subtitle}
-    </>
+    </Box>
   );
 };
+
 export default AuthRegister;

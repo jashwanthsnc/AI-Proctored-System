@@ -20,7 +20,7 @@ function App() {
     <ThemeProvider theme={theme}>
       <Provider store={store}>
         <CheatingLogProvider>
-          <ToastContainer 
+          <ToastContainer
             position="top-right"
             autoClose={3000}
             hideProgressBar={false}
@@ -32,6 +32,7 @@ function App() {
             pauseOnHover
             theme="dark"
             limit={3}
+            toastStyle={{ backgroundColor: "#1A1A1A", color: "#F5F5F5", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px" }}
           />
           <CssBaseline />
           <RouterProvider router={Router} />

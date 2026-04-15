@@ -1,5 +1,6 @@
 import asyncHandler from "express-async-handler";
 import Question from "../models/quesModel.js";
+import Exam from "../models/examModel.js";
 
 const getQuestionsByExamId = asyncHandler(async (req, res) => {
   const { examId } = req.params;
@@ -16,16 +17,31 @@ const getQuestionsByExamId = asyncHandler(async (req, res) => {
 });
 
 const createQuestion = asyncHandler(async (req, res) => {
-  const { question, options, examId } = req.body;
+  const { question, options, examId, ansmarks } = req.body;
 
   if (!examId) {
     return res.status(400).json({ error: "examId is missing or invalid" });
+  }
+
+  // Enforce the exam's question limit
+  const exam = await Exam.findOne({ examId });
+  if (!exam) {
+    res.status(404);
+    throw new Error("Exam not found");
+  }
+  const existingCount = await Question.countDocuments({ examId });
+  if (existingCount >= exam.totalQuestions) {
+    res.status(400);
+    throw new Error(
+      `Question limit reached. This exam allows ${exam.totalQuestions} MCQ question(s).`
+    );
   }
 
   const newQuestion = new Question({
     question,
     options,
     examId,
+    ...(ansmarks !== undefined && { ansmarks }),
   });
 
   const createdQuestion = await newQuestion.save();

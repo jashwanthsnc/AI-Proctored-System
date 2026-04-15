@@ -1,6 +1,10 @@
 import asyncHandler from "express-async-handler";
 import Exam from "./../models/examModel.js";
 import User from "./../models/userModel.js";
+import Question from "./../models/quesModel.js";
+import CodingQuestion from "./../models/codingQuestionModel.js";
+import Result from "./../models/resultModel.js";
+import CheatingLog from "./../models/cheatingLogModel.js";
 
 // @desc Get all exams
 // @route GET /api/exams
@@ -19,8 +23,8 @@ const getExams = asyncHandler(async (req, res) => {
       .populate("eligibleStudents", "name email")
       .populate("teacher", "name email");
   } else {
-    // For teachers and admins: return all exams
-    exams = await Exam.find()
+    // For teachers: return only their own exams
+    exams = await Exam.find({ teacher: userId })
       .populate("eligibleStudents", "name email")
       .populate("teacher", "name email");
   }
@@ -32,7 +36,12 @@ const getExams = asyncHandler(async (req, res) => {
 // @route POST /api/exams
 // @access Private (admin)
 const createExam = asyncHandler(async (req, res) => {
-  const { examName, totalQuestions, duration, liveDate, deadDate } = req.body;
+  const {
+    examName, totalQuestions, duration, liveDate, deadDate,
+    description, subject, instructions, passingScore,
+    marksPerQuestion, negativeMarking, maxAttempts,
+    shuffleQuestions, allowReview, tags,
+  } = req.body;
 
   const exam = new Exam({
     examName,
@@ -42,6 +51,16 @@ const createExam = asyncHandler(async (req, res) => {
     deadDate,
     teacher: req.user._id,
     eligibleStudents: [],
+    description: description || '',
+    subject: subject || '',
+    instructions: instructions || '',
+    passingScore: passingScore !== undefined ? passingScore : 60,
+    marksPerQuestion: marksPerQuestion !== undefined ? marksPerQuestion : 1,
+    negativeMarking: negativeMarking !== undefined ? negativeMarking : 0,
+    maxAttempts: maxAttempts !== undefined ? maxAttempts : 1,
+    shuffleQuestions: shuffleQuestions || false,
+    allowReview: allowReview !== undefined ? allowReview : true,
+    tags: Array.isArray(tags) ? tags : [],
   });
 
   const createdExam = await exam.save();
@@ -56,13 +75,29 @@ const createExam = asyncHandler(async (req, res) => {
 
 const DeleteExamById = asyncHandler(async (req, res) => {
   const { examId } = req.params;
-  const exam = await Exam.findOneAndDelete({ examId: examId });
+
+  const exam = await Exam.findOne({ examId });
   if (!exam) {
     res.status(404);
     throw new Error("Exam not found");
   }
-  console.log("deleted exam", exam);
-  res.status(200).json(exam);
+
+  // Only the teacher who owns the exam can delete it
+  if (exam.teacher.toString() !== req.user._id.toString()) {
+    res.status(403);
+    throw new Error("Not authorised to delete this exam");
+  }
+
+  // Cascade delete all related data
+  await Promise.all([
+    Question.deleteMany({ examId }),
+    CodingQuestion.deleteMany({ examId }),
+    Result.deleteMany({ examId }),
+    CheatingLog.deleteMany({ examId }),
+    Exam.deleteOne({ examId }),
+  ]);
+
+  res.status(200).json({ success: true, examId });
 });
 
 // @desc Update an exam
@@ -70,7 +105,12 @@ const DeleteExamById = asyncHandler(async (req, res) => {
 // @access Private (teacher)
 const updateExam = asyncHandler(async (req, res) => {
   const { examId } = req.params;
-  const { examName, totalQuestions, duration, liveDate, deadDate } = req.body;
+  const {
+    examName, totalQuestions, duration, liveDate, deadDate,
+    description, subject, instructions, passingScore,
+    marksPerQuestion, negativeMarking, maxAttempts,
+    shuffleQuestions, allowReview, tags,
+  } = req.body;
 
   // Validate required fields
   if (!examName || !totalQuestions || !duration || !liveDate || !deadDate) {
@@ -79,7 +119,13 @@ const updateExam = asyncHandler(async (req, res) => {
   }
 
   // Validate dates
-  if (new Date(deadDate) <= new Date(liveDate)) {
+  const liveD = new Date(liveDate);
+  const deadD = new Date(deadDate);
+  if (isNaN(liveD.getTime()) || isNaN(deadD.getTime())) {
+    res.status(400);
+    throw new Error("Invalid date format for liveDate or deadDate");
+  }
+  if (deadD <= liveD) {
     res.status(400);
     throw new Error("Deadline must be after live date");
   }
@@ -104,6 +150,16 @@ const updateExam = asyncHandler(async (req, res) => {
   exam.duration = duration;
   exam.liveDate = liveDate;
   exam.deadDate = deadDate;
+  if (description !== undefined) exam.description = description;
+  if (subject !== undefined) exam.subject = subject;
+  if (instructions !== undefined) exam.instructions = instructions;
+  if (passingScore !== undefined) exam.passingScore = passingScore;
+  if (marksPerQuestion !== undefined) exam.marksPerQuestion = marksPerQuestion;
+  if (negativeMarking !== undefined) exam.negativeMarking = negativeMarking;
+  if (maxAttempts !== undefined) exam.maxAttempts = maxAttempts;
+  if (shuffleQuestions !== undefined) exam.shuffleQuestions = shuffleQuestions;
+  if (allowReview !== undefined) exam.allowReview = allowReview;
+  if (Array.isArray(tags)) exam.tags = tags;
 
   const updatedExam = await exam.save();
 
@@ -215,6 +271,94 @@ const removeStudentsFromExam = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc Duplicate an exam
+// @route POST /api/exams/:examId/duplicate
+// @access Private (teacher)
+const duplicateExam = asyncHandler(async (req, res) => {
+  const { examId } = req.params;
+  const source = await Exam.findOne({ examId });
+
+  if (!source) {
+    res.status(404);
+    throw new Error("Exam not found");
+  }
+
+  if (source.teacher.toString() !== req.user._id.toString() && req.user.role !== "admin") {
+    res.status(403);
+    throw new Error("Not authorized to duplicate this exam");
+  }
+
+  const copy = new Exam({
+    examName: `Copy of ${source.examName}`,
+    totalQuestions: source.totalQuestions,
+    duration: source.duration,
+    liveDate: source.liveDate,
+    deadDate: source.deadDate,
+    teacher: req.user._id,
+    eligibleStudents: [],
+    description: source.description,
+    subject: source.subject,
+    instructions: source.instructions,
+    passingScore: source.passingScore,
+    marksPerQuestion: source.marksPerQuestion,
+    negativeMarking: source.negativeMarking,
+    maxAttempts: source.maxAttempts,
+    shuffleQuestions: source.shuffleQuestions,
+    allowReview: source.allowReview,
+    tags: [...(source.tags || [])],
+  });
+
+  const saved = await copy.save();
+  res.status(201).json(saved);
+});
+
+// @desc Get a single exam by examId
+// @route GET /api/users/exam/:examId/details
+// @access Private
+const getExamById = asyncHandler(async (req, res) => {
+  const { examId } = req.params;
+  const exam = await Exam.findOne({ examId })
+    .populate("eligibleStudents", "name email")
+    .populate("teacher", "name email");
+
+  if (!exam) {
+    res.status(404);
+    throw new Error("Exam not found");
+  }
+  res.status(200).json(exam);
+});
+
+// @desc Get dashboard exam statistics for teacher
+// @route GET /api/users/exam/stats
+// @access Private/Teacher
+const getExamStats = asyncHandler(async (req, res) => {
+  const teacherId = req.user._id;
+  const now = new Date();
+
+  const [totalExams, liveExams, upcomingExams, endedExams, totalAssignments] = await Promise.all([
+    Exam.countDocuments({ teacher: teacherId }),
+    Exam.countDocuments({ teacher: teacherId, liveDate: { $lte: now }, deadDate: { $gte: now } }),
+    Exam.countDocuments({ teacher: teacherId, liveDate: { $gt: now } }),
+    Exam.countDocuments({ teacher: teacherId, deadDate: { $lt: now } }),
+    Exam.aggregate([
+      { $match: { teacher: teacherId } },
+      { $project: { count: { $size: { $ifNull: ["$eligibleStudents", []] } } } },
+      { $group: { _id: null, total: { $sum: "$count" } } },
+    ]),
+  ]);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      total: totalExams,
+      live: liveExams,
+      upcoming: upcomingExams,
+      ended: endedExams,
+      totalAssignments: totalAssignments[0]?.total || 0,
+    },
+  });
+});
+
 export {
   getExams,
   createExam,
@@ -223,4 +367,7 @@ export {
   assignStudentsToExam,
   getEligibleStudents,
   removeStudentsFromExam,
+  duplicateExam,
+  getExamById,
+  getExamStats,
 };

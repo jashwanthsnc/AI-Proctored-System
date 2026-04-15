@@ -17,6 +17,7 @@ const saveCheatingLog = asyncHandler(async (req, res) => {
     windowBlurViolations,
     gazeViolationCount,
     externalDisplayCount,
+    audioViolationCount,
     examId,
     username,
     email,
@@ -48,6 +49,7 @@ const saveCheatingLog = asyncHandler(async (req, res) => {
     {
       $set: {
         username, // Always update username in case it changed
+        ...(req.user?._id && { userId: req.user._id }),
       },
       $max: {
         // Use $max to ensure counts never decrease - keeps highest value
@@ -61,6 +63,7 @@ const saveCheatingLog = asyncHandler(async (req, res) => {
         windowBlurViolations: parseInt(windowBlurViolations) || 0,
         gazeViolationCount: parseInt(gazeViolationCount) || 0,
         externalDisplayCount: parseInt(externalDisplayCount) || 0,
+        audioViolationCount: parseInt(audioViolationCount) || 0,
       },
       $push: {
         screenshots: { $each: screenshots || [] }
@@ -264,7 +267,8 @@ const getRecentViolations = asyncHandler(async (req, res) => {
         { tabSwitchViolations: { $gt: 0 } },
         { windowBlurViolations: { $gt: 0 } },
         { gazeViolationCount: { $gt: 0 } },
-        { externalDisplayCount: { $gt: 0 } }
+        { externalDisplayCount: { $gt: 0 } },
+        { audioViolationCount: { $gt: 0 } }
       ]
     })
     .sort({ updatedAt: -1 })
@@ -296,6 +300,7 @@ const getRecentViolations = asyncHandler(async (req, res) => {
           windowBlurViolations: log.windowBlurViolations || 0,
           gazeViolationCount: log.gazeViolationCount || 0,
           externalDisplayCount: log.externalDisplayCount || 0,
+          audioViolationCount: log.audioViolationCount || 0,
           totalViolations:
             log.noFaceCount +
             log.multipleFaceCount +
@@ -305,7 +310,8 @@ const getRecentViolations = asyncHandler(async (req, res) => {
             (log.tabSwitchViolations || 0) +
             (log.windowBlurViolations || 0) +
             (log.gazeViolationCount || 0) +
-            (log.externalDisplayCount || 0),
+            (log.externalDisplayCount || 0) +
+            (log.audioViolationCount || 0),
           screenshots: log.screenshots,
           lastViolation: log.updatedAt,
           createdAt: log.createdAt
@@ -363,7 +369,10 @@ const getProctoringStats = asyncHandler(async (req, res) => {
           totalCellPhone: { $sum: '$cellPhoneCount' },
           totalProhibitedObject: { $sum: '$prohibitedObjectCount' },
           totalGaze: { $sum: '$gazeViolationCount' },
-          totalExternalDisplay: { $sum: '$externalDisplayCount' }
+          totalExternalDisplay: { $sum: '$externalDisplayCount' },
+          totalAudio: { $sum: '$audioViolationCount' },
+          totalTabSwitch: { $sum: '$tabSwitchViolations' },
+          totalBrowserLockdown: { $sum: '$browserLockdownViolations' }
         }
       }
     ]);
@@ -374,7 +383,10 @@ const getProctoringStats = asyncHandler(async (req, res) => {
       totalCellPhone: 0,
       totalProhibitedObject: 0,
       totalGaze: 0,
-      totalExternalDisplay: 0
+      totalExternalDisplay: 0,
+      totalAudio: 0,
+      totalTabSwitch: 0,
+      totalBrowserLockdown: 0,
     };
 
     res.status(200).json({
@@ -388,9 +400,14 @@ const getProctoringStats = asyncHandler(async (req, res) => {
         prohibitedObject: violationStats.totalProhibitedObject,
         gaze: violationStats.totalGaze,
         externalDisplay: violationStats.totalExternalDisplay,
+        audio: violationStats.totalAudio,
+        tabSwitch: violationStats.totalTabSwitch,
+        browserLockdown: violationStats.totalBrowserLockdown,
         total: violationStats.totalNoFace + violationStats.totalMultipleFace +
                violationStats.totalCellPhone + violationStats.totalProhibitedObject +
-               violationStats.totalGaze + violationStats.totalExternalDisplay
+               violationStats.totalGaze + violationStats.totalExternalDisplay +
+               violationStats.totalAudio + violationStats.totalTabSwitch +
+               violationStats.totalBrowserLockdown
       }
     });
   } catch (error) {
@@ -416,10 +433,79 @@ const calculateTimeRemaining = (deadDate) => {
   return `${minutes}m`;
 };
 
-export { 
-  saveCheatingLog, 
+// @desc Get all cheating logs (teacher analytics)
+// @route GET /api/users/allCheatingLogs
+// @access Private/Teacher
+const getAllCheatingLogs = asyncHandler(async (req, res) => {
+  const { examId, limit: limitParam = 500 } = req.query;
+  const query = examId ? { examId } : {};
+  const logs = await CheatingLog.find(query).sort({ updatedAt: -1 }).limit(parseInt(limitParam));
+  res.status(200).json(logs);
+});
+
+// @desc Export cheating logs as CSV
+// @route GET /api/users/cheatingLogs/export
+// @access Private/Teacher
+const exportCheatingLogsCSV = asyncHandler(async (req, res) => {
+  const { examId } = req.query;
+  const query = examId ? { examId } : {};
+  const logs = await CheatingLog.find(query).sort({ updatedAt: -1 });
+
+  // Enrich with exam names
+  const examCache = {};
+  const getExamName = async (eId) => {
+    if (!examCache[eId]) {
+      const exam = await Exam.findOne({ examId: eId }).select("examName");
+      examCache[eId] = exam?.examName || eId;
+    }
+    return examCache[eId];
+  };
+
+  const rows = await Promise.all(
+    logs.map(async (l) => {
+      const examName = await getExamName(l.examId);
+      const total = (l.noFaceCount||0)+(l.multipleFaceCount||0)+(l.cellPhoneCount||0)+
+        (l.prohibitedObjectCount||0)+(l.tabSwitchViolations||0)+(l.windowBlurViolations||0)+
+        (l.browserLockdownViolations||0)+(l.gazeViolationCount||0)+(l.externalDisplayCount||0)+
+        (l.audioViolationCount||0);
+      return [
+        `"${l.username}"`,
+        `"${l.email}"`,
+        `"${examName}"`,
+        l.noFaceCount||0,
+        l.multipleFaceCount||0,
+        l.cellPhoneCount||0,
+        l.prohibitedObjectCount||0,
+        l.gazeViolationCount||0,
+        l.tabSwitchViolations||0,
+        l.windowBlurViolations||0,
+        l.browserLockdownViolations||0,
+        l.externalDisplayCount||0,
+        l.audioViolationCount||0,
+        total,
+        l.screenshots?.length||0,
+        `"${new Date(l.updatedAt).toLocaleString()}"`,
+      ].join(",");
+    })
+  );
+
+  const header = "Student,Email,Exam,No Face,Multi Face,Cell Phone,Prohibited Obj,Eye Gaze,Tab Switch,Win Blur,Browser Lockdown,Ext Display,Audio,Total,Screenshots,Last Activity";
+  const csv = [header, ...rows].join("\n");
+
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="violations_${examId || "all"}_${Date.now()}.csv"`
+  );
+  res.send(csv);
+});
+
+export {
+  saveCheatingLog,
   getCheatingLogsByExamId,
   getActiveStudents,
   getRecentViolations,
-  getProctoringStats
+  getProctoringStats,
+  getAllCheatingLogs,
+  exportCheatingLogsCSV,
 };

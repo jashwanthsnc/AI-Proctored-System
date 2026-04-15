@@ -1,22 +1,22 @@
 import PropTypes from 'prop-types';
-// mui imports
 import { ListSubheader, styled } from '@mui/material';
 
 const NavGroup = ({ item }) => {
   const ListSubheaderStyle = styled((props) => <ListSubheader disableSticky {...props} />)(
     ({ theme }) => ({
-      ...theme.typography.overline,
-      fontWeight: '700',
-      marginTop: theme.spacing(3),
-      marginBottom: theme.spacing(0),
-      color: theme.palette.text.primary,
-      lineHeight: '26px',
-      padding: '3px 12px',
+      fontWeight: 600,
+      fontSize: '0.6875rem',
+      letterSpacing: '0.07em',
+      textTransform: 'uppercase',
+      color: 'rgba(235,235,245,0.35)',
+      lineHeight: '24px',
+      marginTop: theme.spacing(2.5),
+      marginBottom: theme.spacing(0.5),
+      padding: '0 12px',
+      backgroundColor: 'transparent',
     }),
   );
-  return (
-    <ListSubheaderStyle>{item.subheader}</ListSubheaderStyle>
-  );
+  return <ListSubheaderStyle>{item.subheader}</ListSubheaderStyle>;
 };
 
 NavGroup.propTypes = {

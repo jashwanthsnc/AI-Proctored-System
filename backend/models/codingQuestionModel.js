@@ -53,21 +53,36 @@ const codingSchema = new mongoose.Schema(
         },
       },
     ],
-    submittedAnswer: {
-      code: {
-        type: String,
-        trim: true,
+    submissions: [
+      {
+        userId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
+        },
+        code: {
+          type: String,
+          trim: true,
+        },
+        language: {
+          type: String,
+          enum: ["javascript", "python", "java", "cpp"],
+        },
+        status: {
+          type: String,
+          enum: ["pending", "passed", "failed", "error"],
+          default: "pending",
+        },
+        executionTime: {
+          type: Number,
+          default: 0,
+        },
+        submittedAt: {
+          type: Date,
+          default: Date.now,
+        },
       },
-      language: {
-        type: String,
-        enum: ["javascript", "python", "java", "cpp"],
-      },
-      status: {
-        type: String,
-        enum: ["pending", "passed", "failed", "error"],
-        default: "pending",
-      },
-    },
+    ],
     teacher: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

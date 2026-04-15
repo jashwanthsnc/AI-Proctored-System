@@ -47,14 +47,33 @@ export const cheatingLogApiSlice = apiSlice.injectEndpoints({
       }),
       providesTags: ['ProctoringStats'],
     }),
+    // Get all cheating logs (teacher analytics)
+    getAllCheatingLogs: builder.query({
+      query: (params = {}) => {
+        const { examId, limit = 500 } = params;
+        const q = new URLSearchParams({ limit });
+        if (examId) q.append('examId', examId);
+        return { url: `${CHEATING_LOGS_URL}/allCheatingLogs?${q.toString()}`, method: 'GET' };
+      },
+      providesTags: ['AllCheatingLogs'],
+    }),
+    // Get exam stats
+    getExamStats: builder.query({
+      query: () => ({
+        url: `${CHEATING_LOGS_URL}/exam/stats`,
+        method: 'GET',
+      }),
+      providesTags: ['ExamStats'],
+    }),
   }),
 });
 
 // Export the generated hooks for each endpoint
-export const { 
-  useGetCheatingLogsQuery, 
+export const {
+  useGetCheatingLogsQuery,
   useSaveCheatingLogMutation,
   useGetActiveStudentsQuery,
   useGetRecentViolationsQuery,
   useGetProctoringStatsQuery,
+  useGetAllCheatingLogsQuery,
 } = cheatingLogApiSlice;

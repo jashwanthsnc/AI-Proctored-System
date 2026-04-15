@@ -1,240 +1,226 @@
 import React, { useRef, useState, useEffect } from 'react';
-import * as tf from '@tensorflow/tfjs';
-import * as cocossd from '@tensorflow-models/coco-ssd';
 import Webcam from 'react-webcam';
 import { drawRect } from './utilities';
-import { Box, Card } from '@mui/material';
+import { Box, Typography, Chip, LinearProgress } from '@mui/material';
 import { toast } from 'react-toastify';
 import { UploadClient } from '@uploadcare/upload-client';
+import { loadModels, getModels, areModelsReady, onModelStatusChange } from '../../../utils/modelSingleton';
 
 const client = new UploadClient({ publicKey: 'e69ab6e5db6d4a41760b' });
+const PERIODIC_INTERVAL = 90000;
 
-export default function Home({ cheatingLog, updateCheatingLog, webcamRef: externalWebcamRef }) {
-  const internalWebcamRef = useRef(null);
-  const webcamRef = externalWebcamRef || internalWebcamRef; // Use external ref if provided
-  const canvasRef = useRef(null);
-  const [lastDetectionTime, setLastDetectionTime] = useState({});
-  const lastGlobalWarningTimeRef = useRef(0);  // Use ref for synchronous updates
-  const [screenshots, setScreenshots] = useState([]);
+const PHONE_CLASSES      = new Set(['cell phone']);
+const PROHIBITED_CLASSES = new Set(['laptop', 'book', 'backpack', 'mouse', 'remote', 'keyboard']);
 
-  // Initialize screenshots array when component mounts
-  useEffect(() => {
-    if (cheatingLog && cheatingLog.screenshots) {
-      setScreenshots(cheatingLog.screenshots);
+export default function WebCamProctor({ cheatingLog, updateCheatingLog, webcamRef: externalRef }) {
+  const internalRef  = useRef(null);
+  const webcamRef    = externalRef || internalRef;
+  const canvasRef    = useRef(null);
+  const lastDetectionTime   = useRef({});
+  const lastGlobalWarn      = useRef(0);
+  const intervalRef         = useRef(null);
+  const noFaceCounterRef    = useRef(0);
+  const recentDetections    = useRef(new Map());
+  const lastLowLightWarn    = useRef(0);
+  const [modelStatus, setModelStatus]   = useState(() => areModelsReady() ? 'ready' : 'loading');
+  const [loadProgress, setLoadProgress] = useState(areModelsReady() ? 100 : 0);
+
+  // ── Rolling buffer helpers ────────────────────────────────────────────────
+  const recordDetection = (type, detected) => {
+    if (!recentDetections.current.has(type)) {
+      recentDetections.current.set(type, [false, false, false]);
     }
-  }, [cheatingLog]);
+    const buf = recentDetections.current.get(type);
+    buf.shift();
+    buf.push(detected);
+  };
 
-  const captureScreenshotAndUpload = async (type) => {
+  const shouldFireViolation = (type) => {
+    const buf = recentDetections.current.get(type);
+    if (!buf) return false;
+    const trueCount = buf.filter(Boolean).length;
+    return trueCount >= 2;
+  };
+
+  // ── Screenshot upload ─────────────────────────────────────────────────────
+  const captureAndUpload = async (type) => {
     const video = webcamRef.current?.video;
-
-    if (
-      !video ||
-      video.readyState !== 4 || // ensure video is ready
-      video.videoWidth === 0 ||
-      video.videoHeight === 0
-    ) {
-      console.error('❌ [Screenshot] Video not ready:', {
-        videoExists: !!video,
-        readyState: video?.readyState,
-        width: video?.videoWidth,
-        height: video?.videoHeight
-      });
-      return null;
-    }
-
-    console.log(`📸 [${type}] Capturing screenshot...`);
+    if (!video || video.readyState !== 4 || !video.videoWidth) return null;
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    const context = canvas.getContext('2d');
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    const dataUrl = canvas.toDataURL('image/jpeg');
-    const file = dataURLtoFile(dataUrl, `cheating_${Date.now()}.jpg`);
-
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    const file = dataURLtoFile(canvas.toDataURL('image/jpeg', 0.75), `proctor_${Date.now()}.jpg`);
     try {
-      console.log(`📤 [${type}] Uploading to Uploadcare...`);
       const result = await client.uploadFile(file);
-      console.log(`✅ [${type}] Uploaded to Uploadcare:`, result.cdnUrl);
-      
-      const screenshot = {
-        url: result.cdnUrl,
-        type: type,
-        detectedAt: new Date()
-      };
-
-      // Update local screenshots state
-      setScreenshots(prev => [...prev, screenshot]);
-      
-      return screenshot;
-    } catch (error) {
-      console.error(`❌ [${type}] Upload failed:`, error);
-      return null;
-    }
+      return { url: result.cdnUrl, type, detectedAt: new Date() };
+    } catch { return null; }
   };
 
-  const handleDetection = async (type) => {
+  // ── Violation handler ─────────────────────────────────────────────────────
+  const handleViolation = async (type) => {
     const now = Date.now();
-    const lastTime = lastDetectionTime[type] || 0;
-
-    // Rate limit: Only trigger warning once every 30 seconds for the same violation type
-    // Also enforce global cooldown: no more than 1 warning toast every 10 seconds (regardless of type)
-    if (now - lastTime >= 30000 && now - lastGlobalWarningTimeRef.current >= 10000) {
-      setLastDetectionTime((prev) => ({ ...prev, [type]: now }));
-      lastGlobalWarningTimeRef.current = now;  // Update ref immediately (synchronous)
-      
-      console.log(`🚨 [${type}] Violation Detected!`);
-      
-      // Capture and upload screenshot (optional - don't block on failure)
-      const screenshot = await captureScreenshotAndUpload(type);
-      
-      // Update count regardless of screenshot success
-      console.log(`📝 [${type}] Updating violation count...`);
-      
-      // Use functional form to prevent stale closure issues
-      updateCheatingLog((prevLog) => {
-        const currentCount = prevLog[`${type}Count`] || 0;
-        const newCount = currentCount + 1;
-        
-        console.log(`📊 [${type}] Count Update:`, {
-          previous: currentCount,
-          new: newCount,
-          screenshotCaptured: !!screenshot,
-          fullState: prevLog
-        });
-        
-        const updatedLog = {
-          ...prevLog,
-          [`${type}Count`]: newCount,
-          // Only add screenshot if upload succeeded
-          screenshots: screenshot 
-            ? [...(prevLog.screenshots || []), screenshot]
-            : (prevLog.screenshots || [])
-        };
-        
-        console.log(`✅ [${type}] Updated Log:`, updatedLog);
-        return updatedLog;
-      });
-
-      switch (type) {
-        case 'noFace':
-          toast.warning('👤 Face Not Visible - Warning Recorded');
-          break;
-        case 'multipleFace':
-          toast.warning('👥 Multiple Faces Detected - Warning Recorded');
-          break;
-        case 'cellPhone':
-          toast.warning('📱 Cell Phone Detected - Warning Recorded');
-          break;
-        case 'prohibitedObject':
-          toast.warning('📚 Prohibited Object Detected - Warning Recorded');
-          break;
-        default:
-          break;
-      }
-    }
+    if (now - (lastDetectionTime.current[type] || 0) < 30000) return;
+    if (now - lastGlobalWarn.current < 8000) return;
+    lastDetectionTime.current[type] = now;
+    lastGlobalWarn.current = now;
+    const screenshot = await captureAndUpload(type);
+    updateCheatingLog((prev) => ({
+      ...prev,
+      [`${type}Count`]: (prev[`${type}Count`] || 0) + 1,
+      screenshots: screenshot ? [...(prev.screenshots || []), screenshot] : (prev.screenshots || []),
+    }));
+    const msgs = {
+      noFace:           'Face not visible — Warning recorded',
+      multipleFace:     'Multiple faces detected',
+      cellPhone:        'Phone detected — Warning recorded',
+      prohibitedObject: 'Prohibited object detected',
+    };
+    if (msgs[type]) toast.warning(msgs[type], { autoClose: 4000 });
   };
 
-  const runCoco = async () => {
+  // ── Periodic screenshot ───────────────────────────────────────────────────
+  useEffect(() => {
+    const id = setInterval(async () => {
+      const shot = await captureAndUpload('periodic');
+      if (shot) updateCheatingLog((prev) => ({ ...prev, screenshots: [...(prev.screenshots || []), shot] }));
+    }, PERIODIC_INTERVAL);
+    return () => clearInterval(id);
+  }, []);
+
+  // ── Load models (singleton) ───────────────────────────────────────────────
+  useEffect(() => {
+    const unsub = onModelStatusChange((s) => setModelStatus(s));
+
+    if (areModelsReady()) {
+      setModelStatus('ready'); setLoadProgress(100);
+      startDetection();
+    } else {
+      loadModels((pct) => setLoadProgress(pct))
+        .then(() => { setModelStatus('ready'); startDetection(); })
+        .catch(() => { setModelStatus('error'); toast.error('AI models failed to load.'); });
+    }
+
+    return () => { unsub(); if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, []);
+
+  // ── Low-light sampler ────────────────────────────────────────────────────
+  const checkLowLight = (video) => {
     try {
-      const net = await cocossd.load();
-      console.log('AI model loaded.');
-      setInterval(() => detect(net), 1000);
-    } catch (error) {
-      console.error('Error loading model:', error);
-      toast.error('Error loading AI model. Please refresh the page.');
-    }
+      const sampleCanvas = document.createElement('canvas');
+      sampleCanvas.width = 10; sampleCanvas.height = 10;
+      const ctx = sampleCanvas.getContext('2d');
+      const cx = Math.floor(video.videoWidth / 2);
+      const cy = Math.floor(video.videoHeight / 2);
+      ctx.drawImage(video, cx - 5, cy - 5, 10, 10, 0, 0, 10, 10);
+      const data = ctx.getImageData(0, 0, 10, 10).data;
+      let total = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        total += (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+      }
+      const avgBrightness = total / 100;
+      if (avgBrightness < 30) {
+        const now = Date.now();
+        if (now - lastLowLightWarn.current > 60000) {
+          lastLowLightWarn.current = now;
+          toast.warning('Low lighting — ensure your face is clearly visible', { autoClose: 5000 });
+        }
+      }
+    } catch {}
   };
 
-  const detect = async (net) => {
-    if (webcamRef.current && webcamRef.current.video && webcamRef.current.video.readyState === 4) {
-      const video = webcamRef.current.video;
-      const videoWidth = video.videoWidth;
-      const videoHeight = video.videoHeight;
+  // ── Detection loop ────────────────────────────────────────────────────────
+  const startDetection = () => {
+    if (intervalRef.current) return;
+    intervalRef.current = setInterval(async () => {
+      const { coco, face } = getModels();
+      if (!coco || !face) return;
+      const wRef = webcamRef.current;
+      if (!wRef?.video || wRef.video.readyState !== 4) return;
+      const video = wRef.video;
+      const vw = video.videoWidth; const vh = video.videoHeight;
+      video.width = vw; video.height = vh;
+      if (canvasRef.current) { canvasRef.current.width = vw; canvasRef.current.height = vh; }
 
-      webcamRef.current.video.width = videoWidth;
-      webcamRef.current.video.height = videoHeight;
-      canvasRef.current.width = videoWidth;
-      canvasRef.current.height = videoHeight;
+      checkLowLight(video);
 
       try {
-        const obj = await net.detect(video);
-        const ctx = canvasRef.current.getContext('2d');
-        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-        drawRect(obj, ctx);
+        const objects = await coco.detect(video);
+        if (canvasRef.current) {
+          const ctx = canvasRef.current.getContext('2d');
+          ctx.clearRect(0, 0, vw, vh);
+          drawRect(objects, ctx);
+        }
 
-        let person_count = 0;
-        let faceDetected = false;
+        let phoneThisFrame      = false;
+        let prohibitedThisFrame = false;
 
-        obj.forEach((element) => {
-          const detectedClass = element.class;
-          console.log('Detected:', detectedClass);
-
-          if (detectedClass === 'cell phone') handleDetection('cellPhone');
-          if (detectedClass === 'book' || detectedClass === 'laptop')
-            handleDetection('prohibitedObject');
-          if (detectedClass === 'person') {
-            faceDetected = true;
-            person_count++;
-            if (person_count > 1) handleDetection('multipleFace');
+        objects.forEach(({ class: cls, score }) => {
+          if (PHONE_CLASSES.has(cls) && score >= 0.55) {
+            phoneThisFrame = true;
+          }
+          if (PROHIBITED_CLASSES.has(cls) && score >= 0.5) {
+            prohibitedThisFrame = true;
           }
         });
 
-        if (!faceDetected) handleDetection('noFace');
-      } catch (error) {
-        console.error('Error during detection:', error);
-      }
-    }
+        recordDetection('cellPhone', phoneThisFrame);
+        recordDetection('prohibitedObject', prohibitedThisFrame);
+
+        if (shouldFireViolation('cellPhone'))      handleViolation('cellPhone');
+        if (shouldFireViolation('prohibitedObject')) handleViolation('prohibitedObject');
+
+        const faces = await face.estimateFaces(video);
+
+        if (faces.length === 0) {
+          noFaceCounterRef.current += 1;
+          if (noFaceCounterRef.current >= 4) {
+            handleViolation('noFace');
+          }
+        } else {
+          noFaceCounterRef.current = 0;
+          if (faces.length > 1) handleViolation('multipleFace');
+        }
+      } catch {}
+    }, 1400);
   };
 
-  useEffect(() => {
-    runCoco();
-  }, []);
+  const statusLabel = modelStatus === 'ready' ? 'AI Active' : modelStatus === 'error' ? 'Model Error' : 'Loading…';
+  const statusColor = modelStatus === 'ready' ? '#30D158' : modelStatus === 'error' ? '#FF453A' : '#FF9F0A';
 
   return (
-    <Box>
-      <Card variant="outlined" sx={{ position: 'relative', width: '100%', height: '100%' }}>
-        <Webcam
-          ref={webcamRef}
-          audio={false}
-          muted
-          mirrored
-          screenshotFormat="image/jpeg"
-          videoConstraints={{
-            width: 640,
-            height: 480,
-            facingMode: 'user',
-          }}
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-          }}
-        />
-        <canvas
-          ref={canvasRef}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            zIndex: 10,
-          }}
-        />
-      </Card>
+    <Box sx={{ position: 'relative', width: '100%', backgroundColor: '#000', borderRadius: '10px', overflow: 'hidden' }}>
+      <Webcam
+        ref={webcamRef} audio={false} muted mirrored screenshotFormat="image/jpeg"
+        videoConstraints={{ width: 640, height: 480, facingMode: 'user' }}
+        style={{ width: '100%', display: 'block' }}
+      />
+      <canvas ref={canvasRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10 }} />
+
+      <Box sx={{ position: 'absolute', top: 6, left: 6, display: 'flex', gap: 0.5, flexWrap: 'wrap', zIndex: 20 }}>
+        <Box sx={{ backgroundColor: 'rgba(255,69,58,0.9)', borderRadius: '4px', px: 0.75, py: 0.25, display: 'flex', alignItems: 'center', gap: 0.4 }}>
+          <Box sx={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: '#fff', animation: 'pulse 1.5s infinite' }} />
+          <Typography sx={{ fontSize: '0.5625rem', fontWeight: 800, color: '#fff', letterSpacing: '0.08em', fontFamily: 'Inter,sans-serif' }}>REC</Typography>
+        </Box>
+        <Box sx={{ backgroundColor: `${statusColor}E0`, borderRadius: '4px', px: 0.75, py: 0.25 }}>
+          <Typography sx={{ fontSize: '0.5625rem', fontWeight: 700, color: '#fff', fontFamily: 'Inter,sans-serif' }}>{statusLabel}</Typography>
+        </Box>
+      </Box>
+
+      {modelStatus === 'loading' && (
+        <Box sx={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20 }}>
+          <LinearProgress variant="determinate" value={loadProgress}
+            sx={{ height: 3, backgroundColor: 'rgba(255,255,255,0.15)', '& .MuiLinearProgress-bar': { backgroundColor: '#0A84FF' } }} />
+        </Box>
+      )}
+
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
     </Box>
   );
 }
 
-// Helper to convert base64 to File
 function dataURLtoFile(dataUrl, fileName) {
-  const arr = dataUrl.split(',');
-  const mime = arr[0].match(/:(.*?);/)[1];
-  const bstr = atob(arr[1]);
-  let n = bstr.length;
-  const u8arr = new Uint8Array(n);
-  while (n--) u8arr[n] = bstr.charCodeAt(n);
-  return new File([u8arr], fileName, { type: mime });
+  const arr = dataUrl.split(','); const mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]); let n = bstr.length; const u8 = new Uint8Array(n);
+  while (n--) u8[n] = bstr.charCodeAt(n);
+  return new File([u8], fileName, { type: mime });
 }

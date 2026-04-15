@@ -20,7 +20,7 @@ export const userApiSlice = apiSlice.injectEndpoints({
     //Register Mutation Api
     register: builder.mutation({
       query: (data) => ({
-        url: `${USERS_URL}`,
+        url: `${USERS_URL}/register`,
         method: 'POST',
         body: data,
       }),
@@ -56,6 +56,22 @@ export const userApiSlice = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Students'],
     }),
+    // Delete/deactivate a student (Teacher only)
+    deleteStudent: builder.mutation({
+      query: (id) => ({
+        url: `${USERS_URL}/students/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Students'],
+    }),
+    // Get system stats (Teacher/Admin)
+    getSystemStats: builder.query({
+      query: () => ({
+        url: `${USERS_URL}/stats`,
+        method: 'GET',
+      }),
+      providesTags: ['Stats'],
+    }),
   }),
 });
 
@@ -69,4 +85,6 @@ export const {
   useUpdateUserMutation,
   useGetStudentsQuery,
   useAddStudentMutation,
+  useDeleteStudentMutation,
+  useGetSystemStatsQuery,
 } = userApiSlice;

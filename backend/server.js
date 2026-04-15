@@ -33,11 +33,51 @@ const io = new Server(server, {
     },
     credentials: true,
   },
+  pingTimeout: 60000,
+  pingInterval: 25000,
 });
 const port = process.env.PORT || 5000;
 
+// ── Simple in-memory rate limiter ──────────────────────────────────────────
+const rateLimitStore = new Map();
+const createRateLimiter = (windowMs, max, message) => (req, res, next) => {
+  const key = req.ip || req.connection.remoteAddress;
+  const now = Date.now();
+  const windowStart = now - windowMs;
+
+  if (!rateLimitStore.has(key)) {
+    rateLimitStore.set(key, []);
+  }
+
+  // Remove old entries
+  const requests = rateLimitStore.get(key).filter((t) => t > windowStart);
+  rateLimitStore.set(key, requests);
+
+  if (requests.length >= max) {
+    return res.status(429).json({ message });
+  }
+
+  requests.push(now);
+  next();
+};
+
+// Clean up rate limit store every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, times] of rateLimitStore.entries()) {
+    const recent = times.filter((t) => t > now - 15 * 60 * 1000);
+    if (recent.length === 0) rateLimitStore.delete(key);
+    else rateLimitStore.set(key, recent);
+  }
+}, 5 * 60 * 1000);
+
+const authLimiter = createRateLimiter(15 * 60 * 1000, 20, "Too many login attempts. Please try again in 15 minutes.");
+const apiLimiter = createRateLimiter(1 * 60 * 1000, 120, "Too many requests. Please slow down.");
+const codeExecLimiter = createRateLimiter(1 * 60 * 1000, 15, "Code execution rate limit exceeded.");
+
+// ── Middleware ──────────────────────────────────────────────────────────────
 // to parse req body
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -46,16 +86,19 @@ app.use(
       callback(null, true);
     },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
+
+// Apply general rate limiting to all API routes
+app.use("/api/", apiLimiter);
 
 const EXEC_TIMEOUT_MS = 10000; // 10-second limit per submission
 
-app.post("/run-python", (req, res) => {
+app.post("/run-python", codeExecLimiter, (req, res) => {
   const { code } = req.body;
   if (!code || typeof code !== "string") {
     return res.status(400).send("Error: No code provided");
@@ -80,7 +123,7 @@ app.post("/run-python", (req, res) => {
   });
 });
 
-app.post("/run-javascript", (req, res) => {
+app.post("/run-javascript", codeExecLimiter, (req, res) => {
   const { code } = req.body;
   if (!code || typeof code !== "string") {
     return res.status(400).send("Error: No code provided");
@@ -105,7 +148,7 @@ app.post("/run-javascript", (req, res) => {
   });
 });
 
-app.post("/run-java", (req, res) => {
+app.post("/run-java", codeExecLimiter, (req, res) => {
   const { code } = req.body;
   if (!code || typeof code !== "string") {
     return res.status(400).send("Error: No code provided");
@@ -135,11 +178,23 @@ app.post("/run-java", (req, res) => {
   );
 });
 
-// Routes
+// Routes (apply auth rate limit to login/register)
+app.use("/api/users/auth", authLimiter);
+app.use("/api/users/register", authLimiter);
 app.use("/api/users", userRoutes);
 app.use("/api/users", examRoutes);
 app.use("/api/users", resultRoutes);
 app.use("/api/coding", codingRoutes);
+
+// Health check endpoint
+app.get("/api/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    activeStudents: activeStudents.size,
+  });
+});
 
 // we we are deploying this in production
 // make frontend build then
@@ -217,13 +272,54 @@ io.on("connection", (socket) => {
   socket.on("student:join-exam", (data) => {
     const { examId, email, username, examName } = data;
     const key = `${email}-${examId}`;
+    const ts = new Date().toISOString();
+
+    // ── Duplicate session detection ──────────────────────────────────────────
+    if (activeStudents.has(key)) {
+      const existing = activeStudents.get(key);
+      if (existing.socketId !== socket.id) {
+        // A different socket is already active for this student+exam
+        console.log(`[DUPLICATE SESSION] ${email} joined exam ${examId} from a second device (${existing.socketId} → ${socket.id})`);
+
+        // Alert all teachers
+        io.to("teachers").emit("teacher:duplicate-session", {
+          email,
+          username,
+          examId,
+          examName,
+          timestamp: ts,
+          severity: "critical",
+        });
+
+        // Warn the new (second) socket — probably the cheating device
+        socket.emit("student:warning", {
+          type: "duplicate-session",
+          message: "⚠️ A session for this exam is already active on another device. This incident has been reported to your teacher.",
+          timestamp: ts,
+        });
+
+        // Also warn the original socket
+        io.to(existing.socketId).emit("student:warning", {
+          type: "duplicate-session",
+          message: "⚠️ Someone joined this exam using your account from another device. Alert sent to teacher.",
+          timestamp: ts,
+        });
+
+        // Update existing entry to track dual-device flag
+        existing.duplicateSessionCount = (existing.duplicateSessionCount || 0) + 1;
+        existing.lastDuplicateSession = ts;
+        activeStudents.set(key, existing);
+        broadcastActiveStudents();
+        return; // don't register the second socket as the main student entry
+      }
+    }
 
     activeStudents.set(key, {
       email,
       username,
       examId,
       examName,
-      lastActivity: new Date().toISOString(),
+      lastActivity: ts,
       status: "active",
       socketId: socket.id,
     });
@@ -233,6 +329,56 @@ io.on("connection", (socket) => {
 
     console.log(`Student ${email} joined exam ${examId}. Active students: ${activeStudents.size}`);
     broadcastActiveStudents();
+  });
+
+  // Heartbeat: student sends ping every 30s to keep alive
+  socket.on("student:heartbeat", (data) => {
+    const { examId, email } = data || {};
+    const key = socket.studentKey || `${email}-${examId}`;
+    if (activeStudents.has(key)) {
+      const entry = activeStudents.get(key);
+      entry.lastActivity = new Date().toISOString();
+      activeStudents.set(key, entry);
+    }
+    socket.emit("student:heartbeat-ack", { ts: Date.now() });
+  });
+
+  // Teacher requests refresh of active list
+  socket.on("teacher:refresh", () => {
+    if (socket.user.role === "teacher") {
+      socket.emit("student:active-list", Array.from(activeStudents.values()));
+    }
+  });
+
+  // Student detected an external display — broadcast high-priority alert to all teachers
+  socket.on("student:display-alert", (data) => {
+    const { examId, email, username, examName, screenCount, screens, method, timestamp } = data || {};
+
+    // Update the active student record with display alert info
+    const key = socket.studentKey || `${email}-${examId}`;
+    if (activeStudents.has(key)) {
+      const entry = activeStudents.get(key);
+      entry.displayAlertCount = (entry.displayAlertCount || 0) + 1;
+      entry.lastDisplayAlert  = timestamp || new Date().toISOString();
+      entry.lastDisplayScreens = screens || [];
+      activeStudents.set(key, entry);
+      broadcastActiveStudents();
+    }
+
+    // Broadcast to all connected teachers immediately
+    io.to("teachers").emit("teacher:display-alert", {
+      examId,
+      email,
+      username,
+      examName,
+      screenCount : screenCount || 2,
+      screens     : screens || [],
+      method      : method || "detected",
+      timestamp   : timestamp || new Date().toISOString(),
+      severity    : "critical",
+    });
+
+    console.log(`[DISPLAY ALERT] ${username} (${email}) has ${screenCount} screens — exam: ${examName}`);
   });
 
   socket.on("disconnect", () => {
@@ -246,6 +392,25 @@ io.on("connection", (socket) => {
     }
   });
 });
+
+// Stale student cleanup: remove students who haven't sent a heartbeat in 3 minutes
+setInterval(() => {
+  const staleThreshold = 3 * 60 * 1000; // 3 minutes
+  const now = Date.now();
+  let cleaned = 0;
+
+  for (const [key, student] of activeStudents.entries()) {
+    if (now - new Date(student.lastActivity).getTime() > staleThreshold) {
+      activeStudents.delete(key);
+      cleaned++;
+    }
+  }
+
+  if (cleaned > 0) {
+    console.log(`Cleaned ${cleaned} stale students. Active: ${activeStudents.size}`);
+    broadcastActiveStudents();
+  }
+}, 60 * 1000); // runs every minute
 
 // Error handling middleware - must be after all routes
 app.use(notFound);

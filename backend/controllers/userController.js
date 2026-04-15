@@ -8,7 +8,11 @@ const authUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
 
-  if (user && (await user.matchPassword(password))) {
+  if (user && user.isActive !== false && (await user.matchPassword(password))) {
+    // Update last login time
+    user.lastLogin = new Date();
+    await user.save();
+
     generateToken(res, user._id);
 
     res.status(201).json({
@@ -16,9 +20,18 @@ const authUser = asyncHandler(async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
-      password_encrypted: user.password,
+      phone: user.phone || '',
+      institution: user.institution || '',
+      department: user.department || '',
+      studentId: user.studentId || '',
+      bio: user.bio || '',
+      profilePicture: user.profilePicture || '',
+      lastLogin: user.lastLogin,
       message: "User Successfully login with role: " + user.role,
     });
+  } else if (user && user.isActive === false) {
+    res.status(401);
+    throw new Error("Account is deactivated. Please contact your administrator.");
   } else {
     res.status(401);
     throw new Error("Invalid User email or password ");
@@ -26,7 +39,7 @@ const authUser = asyncHandler(async (req, res) => {
 });
 
 const registerUser = asyncHandler(async (req, res) => {
-  const { name, email, password, role } = req.body;
+  const { name, email, password, role, phone, institution, department, studentId, bio } = req.body;
 
   const userExist = await User.findOne({ email });
 
@@ -40,6 +53,11 @@ const registerUser = asyncHandler(async (req, res) => {
     email,
     password,
     role,
+    phone: phone || '',
+    institution: institution || '',
+    department: department || '',
+    studentId: studentId || '',
+    bio: bio || '',
   });
 
   if (user) {
@@ -50,7 +68,11 @@ const registerUser = asyncHandler(async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
-      password_encrypted: user.password,
+      phone: user.phone,
+      institution: user.institution,
+      department: user.department,
+      studentId: user.studentId,
+      bio: user.bio,
       message: "User Successfully created with role: " + user.role,
     });
   } else {
@@ -60,10 +82,11 @@ const registerUser = asyncHandler(async (req, res) => {
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
+  const isProduction = process.env.NODE_ENV === "production";
   res.cookie("jwt", "", {
     httpOnly: true,
-    secure: true,
-    sameSite: "None",
+    secure: isProduction,
+    sameSite: isProduction ? "None" : "Lax",
     expires: new Date(0),
   });
   res.status(200).json({ message: " User logout User" });
@@ -75,6 +98,13 @@ const getUserProfile = asyncHandler(async (req, res) => {
     name: req.user.name,
     email: req.user.email,
     role: req.user.role,
+    phone: req.user.phone || '',
+    institution: req.user.institution || '',
+    department: req.user.department || '',
+    studentId: req.user.studentId || '',
+    bio: req.user.bio || '',
+    profilePicture: req.user.profilePicture || '',
+    createdAt: req.user.createdAt,
   };
   res.status(200).json(user);
 });
@@ -86,6 +116,12 @@ const updateUserProfile = asyncHandler(async (req, res) => {
     user.name = req.body.name || user.name;
     user.email = req.body.email || user.email;
     user.role = req.body.role || user.role;
+    if (req.body.phone !== undefined) user.phone = req.body.phone;
+    if (req.body.institution !== undefined) user.institution = req.body.institution;
+    if (req.body.department !== undefined) user.department = req.body.department;
+    if (req.body.studentId !== undefined) user.studentId = req.body.studentId;
+    if (req.body.bio !== undefined) user.bio = req.body.bio;
+    if (req.body.profilePicture !== undefined) user.profilePicture = req.body.profilePicture;
 
     if (req.body.password) {
       user.password = req.body.password;
@@ -97,6 +133,13 @@ const updateUserProfile = asyncHandler(async (req, res) => {
       name: updatedUser.name,
       email: updatedUser.email,
       role: updatedUser.role,
+      phone: updatedUser.phone || '',
+      institution: updatedUser.institution || '',
+      department: updatedUser.department || '',
+      studentId: updatedUser.studentId || '',
+      bio: updatedUser.bio || '',
+      profilePicture: updatedUser.profilePicture || '',
+      createdAt: updatedUser.createdAt,
     });
   } else {
     res.status(404);
@@ -109,10 +152,29 @@ const updateUserProfile = asyncHandler(async (req, res) => {
 // @access  Private/Teacher
 const getAllStudents = asyncHandler(async (req, res) => {
   try {
+    const { search, page = 1, limit = 100, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
+
+    const query = { role: "student", isActive: { $ne: false } };
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { institution: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const sortDir = sortOrder === 'asc' ? 1 : -1;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
     // Find all users with role 'student'
-    const students = await User.find({ role: "student" }).select(
-      "-password"
-    );
+    const [students, total] = await Promise.all([
+      User.find(query)
+        .select("-password")
+        .sort({ [sortBy]: sortDir })
+        .skip(skip)
+        .limit(parseInt(limit)),
+      User.countDocuments(query),
+    ]);
 
     // Get all results to calculate statistics
     const studentsWithStats = await Promise.all(
@@ -168,6 +230,9 @@ const getAllStudents = asyncHandler(async (req, res) => {
     res.status(200).json({
       success: true,
       count: studentsWithStats.length,
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit)),
       data: studentsWithStats,
     });
   } catch (error) {
@@ -175,6 +240,63 @@ const getAllStudents = asyncHandler(async (req, res) => {
     res.status(500);
     throw new Error("Failed to fetch students");
   }
+});
+
+// @desc    Delete a student (Teacher/Admin only)
+// @route   DELETE /api/users/students/:id
+// @access  Private/Teacher
+const deleteStudent = asyncHandler(async (req, res) => {
+  const student = await User.findById(req.params.id);
+
+  if (!student) {
+    res.status(404);
+    throw new Error("Student not found");
+  }
+
+  if (student.role !== "student") {
+    res.status(400);
+    throw new Error("Can only delete student accounts");
+  }
+
+  // Soft delete: deactivate the account
+  student.isActive = false;
+  await student.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Student account deactivated successfully",
+  });
+});
+
+// @desc    Get system-wide statistics (Admin/Teacher)
+// @route   GET /api/users/stats
+// @access  Private/Teacher
+const getSystemStats = asyncHandler(async (req, res) => {
+  const [totalStudents, totalTeachers, totalAdmins] = await Promise.all([
+    User.countDocuments({ role: "student", isActive: { $ne: false } }),
+    User.countDocuments({ role: "teacher", isActive: { $ne: false } }),
+    User.countDocuments({ role: "admin", isActive: { $ne: false } }),
+  ]);
+
+  // New users this month
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+  const newUsersThisMonth = await User.countDocuments({
+    createdAt: { $gte: startOfMonth },
+    isActive: { $ne: false },
+  });
+
+  res.status(200).json({
+    success: true,
+    data: {
+      totalStudents,
+      totalTeachers,
+      totalAdmins,
+      totalUsers: totalStudents + totalTeachers + totalAdmins,
+      newUsersThisMonth,
+    },
+  });
 });
 
 // @desc    Add a new student (Teacher only)
@@ -231,4 +353,6 @@ export {
   updateUserProfile,
   getAllStudents,
   addStudent,
+  deleteStudent,
+  getSystemStats,
 };

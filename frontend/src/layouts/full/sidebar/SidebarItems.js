@@ -16,7 +16,7 @@ const SidebarItems = () => {
       <List sx={{ pt: 0 }} className="sidebarNav">
         {Menuitems.map((item) => {
           // Check if the item has roles defined and if the user's role is allowed
-          if (item.roles && !item.roles.includes(userInfo.role)) {
+          if (item.roles && !item.roles.includes(userInfo?.role)) {
             return null; // Don't render this menu item for this user role
           }
 

@@ -1,0 +1,325 @@
+@startuml AI_Proctored_System_Architecture
+!theme black-knight
+skinparam backgroundColor #0A0A0F
+skinparam defaultFontColor #E0E0E0
+skinparam defaultFontName Segoe UI
+skinparam defaultFontSize 11
+skinparam ArrowColor #3A3A55
+skinparam ArrowThickness 1.5
+skinparam RoundCorner 10
+skinparam Shadowing false
+skinparam Padding 6
+
+skinparam package {
+  BackgroundColor #131318
+  BorderColor #2A2A38
+  FontColor #8E8EA0
+  FontStyle bold
+}
+skinparam component {
+  BackgroundColor #0D1A2E
+  BorderColor #0A84FF
+  FontColor #60B0FF
+}
+skinparam database {
+  BackgroundColor #0D2218
+  BorderColor #30D158
+  FontColor #50E880
+}
+skinparam actor {
+  BackgroundColor #1A0D2E
+  BorderColor #BF5AF2
+  FontColor #D480FF
+}
+skinparam node {
+  BackgroundColor #2A1A0D
+  BorderColor #FF9F0A
+  FontColor #FFB84D
+}
+skinparam cloud {
+  BackgroundColor #131318
+  BorderColor #3A3A48
+  FontColor #8E8EA0
+}
+
+title AI Proctored Examination System — Full Architecture
+
+' ─────────────────────────────────────────
+' ACTORS
+' ─────────────────────────────────────────
+actor Student  #1A0D2E
+actor Teacher  #0D2218
+
+' ─────────────────────────────────────────
+' FRONTEND
+' ─────────────────────────────────────────
+package "Frontend — React 18 + Redux Toolkit" #0D0D1A {
+
+  package "Authentication" #0D1A2E {
+    [Login Page]          #0D1A2E
+    [Register Page]       #0D1A2E
+    [PrivateRoute Guard]  #0D1A2E
+    [TeacherRoute Guard]  #0D1A2E
+  }
+
+  package "Student Pages" #0D2028 {
+    [StudentDashboardPage]  #0D2028
+    [ExamPage (Browse)]     #0D2028
+    [ExamDetails]           #0D2028
+    [TestPage ★]            #2A1A0D
+    [ResultPage]            #0D2218
+    [CodeEditor (Coder)]    #0F0F28
+  }
+
+  package "Teacher Pages" #1A0D2E {
+    [TeacherDashboard]     #1A0D2E
+    [TeacherAnalyticsPage] #1A0D2E
+    [CreateExamPage]       #1A0D2E
+    [EditExamPage]         #1A0D2E
+    [AddQuestions]         #1A0D2E
+    [AllExamsPage]         #1A0D2E
+    [StudentsPage]         #1A0D2E
+    [LiveProctoringPage]   #2A0D0D
+    [ExamLogPage]          #1A0D2E
+  }
+
+  package "AI Detection Engine (active during exam)" #2A1A0D {
+    node "Eye Gaze Tracking\nuseEyeGazeTracking.js" as EyeGaze #1A150A {
+      [MediaPipe 6-pt BlazeFace]
+      [Head Yaw via Ear Keypoints]
+      [3-frame sustained detect]
+      [Adaptive cooldown 5→3→2s]
+    }
+    node "Webcam AI Detection\nWebCam.jsx" as WebcamAI #0D1A15 {
+      [COCO-SSD TF.js Model]
+      [No Face (4-frame buffer)]
+      [Multi-Face Detection]
+      [Cell Phone ≥0.55]
+      [Prohibited Objects ≥0.50]
+      [2-of-3 frame rolling buffer]
+    }
+    node "Audio Monitoring\nuseAudioMonitoring.js" as Audio #1A0D0D {
+      [Web Audio API]
+      [Noise threshold detect]
+      [Volume spike analysis]
+    }
+    node "Browser Lockdown\nuseBrowserLockdown.js" as Lockdown #0D1520 {
+      [Tab / Window switch]
+      [Blocked: Ctrl+W/N/T/R/F5]
+      [Mouse leave (15s rate limit)]
+      [Extended absence 8s]
+      [beforeunload / pagehide]
+    }
+    node "External Display\nuseExternalDisplayDetection.js" as ExtDisplay #0D1520 {
+      [screen.isExtended API]
+      [Multi-monitor detection]
+    }
+    node "DevTools Detection\nuseDevToolsDetection.js" as DevTools #1A1A0D {
+      [Window size delta check]
+      [Rate-limited 30s]
+    }
+    node "Network Monitoring\nuseNetworkMonitoring.js" as Network #0D1A15 {
+      [Navigator.onLine]
+      [Connection change events]
+    }
+    node "Screenshot Capture\n(in TestPage.jsx)" as Screenshot #2A0D0D {
+      [Webcam canvas grab]
+      [Uploadcare CDN upload]
+      [Periodic every 90s]
+      [On every violation]
+      [10 enum type tags]
+    }
+  }
+
+  package "State Management" #0F0F28 {
+    [Redux Store\n(authSlice, examApiSlice,\ncheatingLogApiSlice,\nuserApiSlice, resultApiSlice)]   #0F0F28
+    [CheatingLogContext\n(noFaceCount, multipleFaceCount,\ncellPhoneCount, gazeViolationCount,\naudioViolationCount, tabSwitchCount,\nlockdownCount, externalDisplayCount,\nscreenshots[], auto-save 30s)]  #2A1A0D
+    [modelSingleton.js\n(COCO-SSD + MediaPipe\nlazy load, shared instance)]  #131318
+  }
+}
+
+' ─────────────────────────────────────────
+' REAL-TIME
+' ─────────────────────────────────────────
+package "Real-Time Layer — Socket.io" #2A0D0D {
+  [Socket.io Server]        #2A0D0D
+  [exam:join event]         #2A0D0D
+  [violation:detected emit] #2A0D0D
+  [heartbeat (15s)]         #2A0D0D
+  [active-students broadcast]  #2A0D0D
+  [recent-violations stream]   #2A0D0D
+  [proctoring-stats push]      #2A0D0D
+}
+
+' ─────────────────────────────────────────
+' BACKEND
+' ─────────────────────────────────────────
+package "Backend — Express.js + Node.js" #0D1A0D {
+
+  package "Middleware" #0D1A2E {
+    [protect (verify JWT)]         #0D1A2E
+    [teacherOnly (role check)]     #0D1A2E
+    [checkExamEligibility]         #0D1A2E
+    [errorHandler]                 #0D1A2E
+  }
+
+  package "Routes /api" #0D1A2E {
+    [userRoutes\n/users, /users/auth,\n/users/logout,\n/users/profile]       #0D1A2E
+    [examRoutes\n/exam, /exam/:examId,\n/exam/active-students*,\n/exam/recent-violations*,\n/exam/proctoring-stats*,\n/exam/:examId/duplicate,\n/exam/:examId/students,\n/exam/questions,\n/cheatingLogs]  #0D1A2E
+    [resultRoutes\n/result, /result/:id]  #0D1A2E
+  }
+
+  package "Controllers" #131318 {
+    [userController\n(register, login, logout,\ngetProfile, updateProfile,\ngetAllUsers)]  #131318
+    [examController\n(createExam, getExams,\nupdateExam, deleteExam,\nduplicateExam, assignStudents,\ngetEligibleStudents,\nremoveStudents)]  #131318
+    [cheatingLogController\n(saveCheatingLog $upsert,\ngetCheatingLogsByExamId,\ngetAllCheatingLogs,\ngetActiveStudents,\ngetRecentViolations,\ngetProctoringStats)]  #131318
+    [resultController\n(submitResult,\ngetAllResults,\ngetResultByExamId)]  #131318
+    [quesController\n(createQuestion,\ngetQuestionsByExamId,\nupdateQuestion,\ndeleteQuestion)]  #131318
+  }
+}
+
+' ─────────────────────────────────────────
+' DATABASE
+' ─────────────────────────────────────────
+package "Database — MongoDB Atlas (Mongoose)" #0D2218 {
+  database "Users\n_id, name, email\npassword (bcrypt)\nrole: student|teacher\npic (avatar URL)" as UsersDB #0D2218
+  database "Exams\n_id, examName, subject\nduration, totalMarks\nnegativeMarking\nshuffleQuestions\nstartDate, endDate\neligibleStudents[]\nshowResults, active" as ExamsDB #0D2218
+  database "Questions\n_id, examId (ref)\nquestion, options[]\ncorrectAnswer, marks\nnegativeMarks" as QuestionsDB #0D2218
+  database "Results\n_id, student (ref)\nexam (ref), score\npercentage, passed\nanswers[], timeTaken\nshowToStudent" as ResultsDB #0D2218
+  database "CheatingLogs\n_id, student (ref), exam (ref)\nnoFaceCount, multipleFaceCount\ncellPhoneCount, gazeViolationCount\naudioViolationCount, tabSwitchCount\nlockdownCount, externalDisplayCount\nscreenshots[]{url,type,timestamp}\n─────────────────────────\ntype enum (10 values):\nperiodic|noFace|multipleFace|\ncellPhone|prohibitedObject|\ngazeViolation|tabSwitch|\nlockdown|audioViolation|\nexternalDisplay" as CheatingDB #0D2218
+}
+
+' ─────────────────────────────────────────
+' EXTERNAL SERVICES
+' ─────────────────────────────────────────
+cloud "External Services" #131318 {
+  [Uploadcare CDN\nScreenshot Storage\npublicKey: e69ab6e5...]  #2A1A0D
+  [TensorFlow.js\nCOCO-SSD model\n(client-side, no server)]     #0D1A2E
+  [MediaPipe\nBlazeFace 6-keypoint\n(client-side)]               #1A0D2E
+  [JWT\nStateless auth tokens]  #131318
+  [bcryptjs\nPassword hashing\nsalt rounds: 10]  #131318
+}
+
+' ─────────────────────────────────────────
+' RELATIONSHIPS
+' ─────────────────────────────────────────
+
+' User entry
+Student --> [Login Page]
+Teacher --> [Login Page]
+Student --> [Register Page]
+
+' Auth flow
+[Login Page] --> [Redux Store\n(authSlice, examApiSlice,\ncheatingLogApiSlice,\nuserApiSlice, resultApiSlice)] : JWT stored
+[PrivateRoute Guard] --> [StudentDashboardPage] : role=student
+[PrivateRoute Guard] --> [TeacherDashboard] : role=teacher
+[TeacherRoute Guard] --> [TeacherDashboard]
+
+' Student journey
+[StudentDashboardPage] --> [ExamPage (Browse)]
+[ExamPage (Browse)] --> [ExamDetails]
+[ExamDetails] --> [TestPage ★]
+[TestPage ★] --> [ResultPage]
+[ExamDetails] --> [CodeEditor (Coder)]
+
+' Teacher journey
+[TeacherDashboard] --> [TeacherAnalyticsPage]
+[TeacherDashboard] --> [CreateExamPage]
+[CreateExamPage] --> [AddQuestions]
+[TeacherDashboard] --> [AllExamsPage]
+[AllExamsPage] --> [EditExamPage]
+[TeacherDashboard] --> [StudentsPage]
+[TeacherDashboard] --> [LiveProctoringPage]
+[TeacherDashboard] --> [ExamLogPage]
+
+' AI Detection hooks used in TestPage
+[TestPage ★] --> EyeGaze : useEyeGazeTracking()
+[TestPage ★] --> WebcamAI : <WebCam />
+[TestPage ★] --> Audio : useAudioMonitoring()
+[TestPage ★] --> Lockdown : useBrowserLockdown()
+[TestPage ★] --> ExtDisplay : useExternalDisplayDetection()
+[TestPage ★] --> DevTools : useDevToolsDetection()
+[TestPage ★] --> Network : useNetworkMonitoring()
+
+' All detection → Screenshot → CheatingLogContext
+EyeGaze --> Screenshot : onGazeViolation
+WebcamAI --> Screenshot : onViolation
+Audio --> Screenshot : onNoiseDetected
+Lockdown --> Screenshot : onTabSwitch / onWindowBlur
+ExtDisplay --> Screenshot : onDisplayViolation
+DevTools --> Screenshot : onDevToolsDetected
+
+Screenshot --> [Uploadcare CDN\nScreenshot Storage\npublicKey: e69ab6e5...] : upload()
+[Uploadcare CDN\nScreenshot Storage\npublicKey: e69ab6e5...] --> [CheatingLogContext\n(noFaceCount, multipleFaceCount,\ncellPhoneCount, gazeViolationCount,\naudioViolationCount, tabSwitchCount,\nlockdownCount, externalDisplayCount,\nscreenshots[], auto-save 30s)] : CDN URL appended
+
+EyeGaze --> [CheatingLogContext\n(noFaceCount, multipleFaceCount,\ncellPhoneCount, gazeViolationCount,\naudioViolationCount, tabSwitchCount,\nlockdownCount, externalDisplayCount,\nscreenshots[], auto-save 30s)]
+WebcamAI --> [CheatingLogContext\n(noFaceCount, multipleFaceCount,\ncellPhoneCount, gazeViolationCount,\naudioViolationCount, tabSwitchCount,\nlockdownCount, externalDisplayCount,\nscreenshots[], auto-save 30s)]
+Audio --> [CheatingLogContext\n(noFaceCount, multipleFaceCount,\ncellPhoneCount, gazeViolationCount,\naudioViolationCount, tabSwitchCount,\nlockdownCount, externalDisplayCount,\nscreenshots[], auto-save 30s)]
+Lockdown --> [CheatingLogContext\n(noFaceCount, multipleFaceCount,\ncellPhoneCount, gazeViolationCount,\naudioViolationCount, tabSwitchCount,\nlockdownCount, externalDisplayCount,\nscreenshots[], auto-save 30s)]
+
+' Models used by detection
+[modelSingleton.js\n(COCO-SSD + MediaPipe\nlazy load, shared instance)] --> [TensorFlow.js\nCOCO-SSD model\n(client-side, no server)]
+[modelSingleton.js\n(COCO-SSD + MediaPipe\nlazy load, shared instance)] --> [MediaPipe\nBlazeFace 6-keypoint\n(client-side)]
+WebcamAI --> [modelSingleton.js\n(COCO-SSD + MediaPipe\nlazy load, shared instance)]
+EyeGaze --> [modelSingleton.js\n(COCO-SSD + MediaPipe\nlazy load, shared instance)]
+
+' Socket.io
+[TestPage ★] --> [Socket.io Server] : exam:join, violation:detected, heartbeat
+[LiveProctoringPage] --> [Socket.io Server] : subscribe
+[Socket.io Server] --> [LiveProctoringPage] : active-students, recent-violations, proctoring-stats
+
+' Frontend → Backend API
+[Redux Store\n(authSlice, examApiSlice,\ncheatingLogApiSlice,\nuserApiSlice, resultApiSlice)] --> [userRoutes\n/users, /users/auth,\n/users/logout,\n/users/profile] : RTK Query
+[Redux Store\n(authSlice, examApiSlice,\ncheatingLogApiSlice,\nuserApiSlice, resultApiSlice)] --> [examRoutes\n/exam, /exam/:examId,\n/exam/active-students*,\n/exam/recent-violations*,\n/exam/proctoring-stats*,\n/exam/:examId/duplicate,\n/exam/:examId/students,\n/exam/questions,\n/cheatingLogs] : RTK Query
+[Redux Store\n(authSlice, examApiSlice,\ncheatingLogApiSlice,\nuserApiSlice, resultApiSlice)] --> [resultRoutes\n/result, /result/:id] : RTK Query
+[CheatingLogContext\n(noFaceCount, multipleFaceCount,\ncellPhoneCount, gazeViolationCount,\naudioViolationCount, tabSwitchCount,\nlockdownCount, externalDisplayCount,\nscreenshots[], auto-save 30s)] --> [examRoutes\n/exam, /exam/:examId,\n/exam/active-students*,\n/exam/recent-violations*,\n/exam/proctoring-stats*,\n/exam/:examId/duplicate,\n/exam/:examId/students,\n/exam/questions,\n/cheatingLogs] : POST /cheatingLogs (auto-save + submit)
+
+' Middleware applied
+[userRoutes\n/users, /users/auth,\n/users/logout,\n/users/profile] --> [protect (verify JWT)]
+[examRoutes\n/exam, /exam/:examId,\n/exam/active-students*,\n/exam/recent-violations*,\n/exam/proctoring-stats*,\n/exam/:examId/duplicate,\n/exam/:examId/students,\n/exam/questions,\n/cheatingLogs] --> [protect (verify JWT)]
+[examRoutes\n/exam, /exam/:examId,\n/exam/active-students*,\n/exam/recent-violations*,\n/exam/proctoring-stats*,\n/exam/:examId/duplicate,\n/exam/:examId/students,\n/exam/questions,\n/cheatingLogs] --> [teacherOnly (role check)]
+
+' Routes → Controllers
+[userRoutes\n/users, /users/auth,\n/users/logout,\n/users/profile] --> [userController\n(register, login, logout,\ngetProfile, updateProfile,\ngetAllUsers)]
+[examRoutes\n/exam, /exam/:examId,\n/exam/active-students*,\n/exam/recent-violations*,\n/exam/proctoring-stats*,\n/exam/:examId/duplicate,\n/exam/:examId/students,\n/exam/questions,\n/cheatingLogs] --> [examController\n(createExam, getExams,\nupdateExam, deleteExam,\nduplicateExam, assignStudents,\ngetEligibleStudents,\nremoveStudents)]
+[examRoutes\n/exam, /exam/:examId,\n/exam/active-students*,\n/exam/recent-violations*,\n/exam/proctoring-stats*,\n/exam/:examId/duplicate,\n/exam/:examId/students,\n/exam/questions,\n/cheatingLogs] --> [cheatingLogController\n(saveCheatingLog $upsert,\ngetCheatingLogsByExamId,\ngetAllCheatingLogs,\ngetActiveStudents,\ngetRecentViolations,\ngetProctoringStats)]
+[examRoutes\n/exam, /exam/:examId,\n/exam/active-students*,\n/exam/recent-violations*,\n/exam/proctoring-stats*,\n/exam/:examId/duplicate,\n/exam/:examId/students,\n/exam/questions,\n/cheatingLogs] --> [quesController\n(createQuestion,\ngetQuestionsByExamId,\nupdateQuestion,\ndeleteQuestion)]
+[resultRoutes\n/result, /result/:id] --> [resultController\n(submitResult,\ngetAllResults,\ngetResultByExamId)]
+
+' Controllers → DB
+[userController\n(register, login, logout,\ngetProfile, updateProfile,\ngetAllUsers)] --> UsersDB
+[examController\n(createExam, getExams,\nupdateExam, deleteExam,\nduplicateExam, assignStudents,\ngetEligibleStudents,\nremoveStudents)] --> ExamsDB
+[quesController\n(createQuestion,\ngetQuestionsByExamId,\nupdateQuestion,\ndeleteQuestion)] --> QuestionsDB
+[cheatingLogController\n(saveCheatingLog $upsert,\ngetCheatingLogsByExamId,\ngetAllCheatingLogs,\ngetActiveStudents,\ngetRecentViolations,\ngetProctoringStats)] --> CheatingDB
+[resultController\n(submitResult,\ngetAllResults,\ngetResultByExamId)] --> ResultsDB
+
+' Auth tokens
+[userController\n(register, login, logout,\ngetProfile, updateProfile,\ngetAllUsers)] --> [JWT\nStateless auth tokens]
+[userController\n(register, login, logout,\ngetProfile, updateProfile,\ngetAllUsers)] --> [bcryptjs\nPassword hashing\nsalt rounds: 10]
+
+' DB relationships (notes)
+ExamsDB ..> UsersDB : eligibleStudents[] → User._id
+QuestionsDB ..> ExamsDB : examId → Exam._id
+ResultsDB ..> UsersDB : student → User._id
+ResultsDB ..> ExamsDB : exam → Exam._id
+CheatingDB ..> UsersDB : student → User._id
+CheatingDB ..> ExamsDB : exam → Exam._id
+
+' Socket.io → cheatingLog controller
+[Socket.io Server] --> [cheatingLogController\n(saveCheatingLog $upsert,\ngetCheatingLogsByExamId,\ngetAllCheatingLogs,\ngetActiveStudents,\ngetRecentViolations,\ngetProctoringStats)] : real-time stats queries
+
+legend right
+  |= Symbol |= Meaning |
+  | ★        | Core orchestrator component |
+  | *        | Static routes (must precede :examId) |
+  | →        | Direct dependency / call |
+  | ..>      | Database reference (foreign key) |
+  | Blue     | API / Auth flow |
+  | Purple   | Teacher-only |
+  | Cyan     | Student flow |
+  | Orange   | AI Detection |
+  | Red      | Real-time critical |
+  | Green    | Database / Controllers |
+endlegend
+
+@enduml

@@ -55,5 +55,12 @@ const resultSchema = mongoose.Schema(
   }
 );
 
+// Indexes for performance
+resultSchema.index({ examId: 1 });
+resultSchema.index({ userId: 1 });
+resultSchema.index({ examId: 1, userId: 1 }, { unique: true });
+resultSchema.index({ showToStudent: 1 });
+resultSchema.index({ createdAt: -1 });
+
 const Result = mongoose.model("Result", resultSchema);
 export default Result;

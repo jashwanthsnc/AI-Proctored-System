@@ -26,10 +26,10 @@ export const examApiSlice = apiSlice.injectEndpoints({
 
     // Update an exam
     updateExam: builder.mutation({
-      query: ({ examId, examName, totalQuestions, duration, liveDate, deadDate }) => ({
+      query: ({ examId, ...fields }) => ({
         url: `${EXAMS_URL}/exam/${examId}`,
         method: 'PUT',
-        body: { examName, totalQuestions, duration, liveDate, deadDate },
+        body: fields,
       }),
       invalidatesTags: ['Exams'],
     }),
@@ -66,7 +66,7 @@ export const examApiSlice = apiSlice.injectEndpoints({
     deleteExam: builder.mutation({
       query: (examId) => ({
         url: `${EXAMS_URL}/exam/${examId}`,
-        method: 'POST',
+        method: 'DELETE',
         credentials: 'include',
       }),
       invalidatesTags: ['Exams'],
@@ -144,6 +144,33 @@ export const examApiSlice = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['CodingQuestions'],
     }),
+
+    // Duplicate an exam
+    duplicateExam: builder.mutation({
+      query: (examId) => ({
+        url: `${EXAMS_URL}/exam/${examId}/duplicate`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Exams'],
+    }),
+
+    // Get single exam details
+    getExamById: builder.query({
+      query: (examId) => ({
+        url: `${EXAMS_URL}/exam/${examId}/details`,
+        method: 'GET',
+      }),
+      providesTags: (result, error, examId) => [{ type: 'Exams', id: examId }],
+    }),
+
+    // Get exam stats for teacher dashboard
+    getExamStats: builder.query({
+      query: () => ({
+        url: `${EXAMS_URL}/exam/stats`,
+        method: 'GET',
+      }),
+      providesTags: ['ExamStats'],
+    }),
   }),
 });
 
@@ -163,4 +190,7 @@ export const {
   useDeleteQuestionMutation,
   useUpdateCodingQuestionMutation,
   useDeleteCodingQuestionMutation,
+  useDuplicateExamMutation,
+  useGetExamByIdQuery,
+  useGetExamStatsQuery,
 } = examApiSlice;

@@ -1,18 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { toast } from 'react-toastify';
 
-/**
- * Custom hook for browser lockdown during exams
- * Implements comprehensive security measures to prevent cheating
- * 
- * @param {Object} options Configuration options
- * @param {boolean} options.enabled Whether lockdown is active
- * @param {Function} options.onViolation Callback when a violation is detected
- * @param {Function} options.onTabSwitch Callback when tab switch is detected
- * @param {Function} options.onWindowBlur Callback when window loses focus
- * @param {boolean} options.enforceFullscreen Whether to enforce fullscreen mode
- * @returns {Object} Lockdown state and controls
- */
 const useBrowserLockdown = ({
   enabled = true,
   onViolation = null,
@@ -20,329 +8,224 @@ const useBrowserLockdown = ({
   onWindowBlur = null,
   enforceFullscreen = true,
 } = {}) => {
-  const isFullscreenRef = useRef(false);
+  const isFullscreenRef   = useRef(false);
   const violationCountRef = useRef(0);
   const tabSwitchCountRef = useRef(0);
-  
-  // Rate limiting: Track last time warnings were shown
-  const lastTabSwitchWarningRef = useRef(0);
-  const lastWindowBlurWarningRef = useRef(0);
-  const lastFullscreenWarningRef = useRef(0);
 
-  // Check if document is in fullscreen
-  const checkFullscreen = useCallback(() => {
-    return !!(
-      document.fullscreenElement ||
-      document.webkitFullscreenElement ||
-      document.mozFullScreenElement ||
-      document.msFullscreenElement
-    );
-  }, []);
+  const onViolationRef  = useRef(onViolation);
+  const onTabSwitchRef  = useRef(onTabSwitch);
+  const onWindowBlurRef = useRef(onWindowBlur);
+  useEffect(() => { onViolationRef.current = onViolation; }, [onViolation]);
+  useEffect(() => { onTabSwitchRef.current = onTabSwitch; }, [onTabSwitch]);
+  useEffect(() => { onWindowBlurRef.current = onWindowBlur; }, [onWindowBlur]);
 
-  // Enter fullscreen mode
+  const lastTabSwitchWarningRef   = useRef(0);
+  const lastWindowBlurWarningRef  = useRef(0);
+  const lastFullscreenWarningRef  = useRef(0);
+  const lastMouseLeaveWarningRef  = useRef(0);
+  const tabHiddenTimerRef         = useRef(null);
+
+  const checkFullscreen = useCallback(() => !!(
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.mozFullScreenElement ||
+    document.msFullscreenElement
+  ), []);
+
   const enterFullscreen = useCallback(async () => {
     try {
       const elem = document.documentElement;
-      if (elem.requestFullscreen) {
-        await elem.requestFullscreen();
-      } else if (elem.webkitRequestFullscreen) {
-        await elem.webkitRequestFullscreen();
-      } else if (elem.mozRequestFullScreen) {
-        await elem.mozRequestFullScreen();
-      } else if (elem.msRequestFullscreen) {
-        await elem.msRequestFullscreen();
-      }
+      if (elem.requestFullscreen) await elem.requestFullscreen();
+      else if (elem.webkitRequestFullscreen) await elem.webkitRequestFullscreen();
+      else if (elem.mozRequestFullScreen) await elem.mozRequestFullScreen();
+      else if (elem.msRequestFullscreen) await elem.msRequestFullscreen();
       isFullscreenRef.current = true;
       return true;
-    } catch (error) {
-      console.error('Failed to enter fullscreen:', error);
+    } catch {
       return false;
     }
   }, []);
 
-  // Exit fullscreen mode
   const exitFullscreen = useCallback(async () => {
     try {
-      if (document.exitFullscreen) {
-        await document.exitFullscreen();
-      } else if (document.webkitExitFullscreen) {
-        await document.webkitExitFullscreen();
-      } else if (document.mozCancelFullScreen) {
-        await document.mozCancelFullScreen();
-      } else if (document.msExitFullscreen) {
-        await document.msExitFullscreen();
-      }
+      if (document.exitFullscreen) await document.exitFullscreen();
+      else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
+      else if (document.mozCancelFullScreen) await document.mozCancelFullScreen();
+      else if (document.msExitFullscreen) await document.msExitFullscreen();
       isFullscreenRef.current = false;
-    } catch (error) {
-      console.error('Failed to exit fullscreen:', error);
-    }
+    } catch {}
   }, []);
 
-  // Log violation
   const logViolation = useCallback((type, description) => {
     violationCountRef.current += 1;
-    console.warn(`🚨 Lockdown Violation #${violationCountRef.current}:`, type, description);
-    
-    if (onViolation) {
-      onViolation({
-        type,
-        description,
-        timestamp: new Date().toISOString(),
-        count: violationCountRef.current,
-      });
+    if (onViolationRef.current) {
+      onViolationRef.current({ type, description, timestamp: new Date().toISOString(), count: violationCountRef.current });
     }
-  }, [onViolation]);
+  }, []);
 
   useEffect(() => {
     if (!enabled) return;
 
     // === 1. DISABLE RIGHT-CLICK ===
-    const handleContextMenu = (e) => {
-      e.preventDefault();
-      logViolation('RIGHT_CLICK', 'Attempted to open context menu');
-      return false;
-    };
+    const handleContextMenu = (e) => { e.preventDefault(); logViolation('RIGHT_CLICK', 'Context menu attempted'); };
 
-    // === 2. DISABLE COPY/PASTE ===
-    const handleCopy = (e) => {
-      e.preventDefault();
-      logViolation('COPY', 'Attempted to copy content');
-      return false;
-    };
+    // === 2. DISABLE COPY / PASTE / CUT ===
+    const handleCopy  = (e) => { e.preventDefault(); logViolation('COPY', 'Copy attempted'); };
+    const handleCut   = (e) => { e.preventDefault(); logViolation('CUT', 'Cut attempted'); };
+    const handlePaste = (e) => { e.preventDefault(); logViolation('PASTE', 'Paste attempted'); };
 
-    const handleCut = (e) => {
-      e.preventDefault();
-      logViolation('CUT', 'Attempted to cut content');
-      return false;
-    };
-
-    const handlePaste = (e) => {
-      e.preventDefault();
-      logViolation('PASTE', 'Attempted to paste content');
-      return false;
-    };
-
-    // === 3. DISABLE PRINT SCREEN & KEYBOARD SHORTCUTS ===
+    // === 3. BLOCK DANGEROUS KEYBOARD SHORTCUTS ===
     const handleKeyDown = (e) => {
-      const forbiddenKeys = [
-        'F12', // Developer tools
-        'F11', // Fullscreen toggle (we control this)
-        'PrintScreen', // Screenshot
-        'I', // Ctrl+Shift+I (DevTools)
-        'J', // Ctrl+Shift+J (Console)
-        'C', // Ctrl+Shift+C (Element inspector)
-        'U', // Ctrl+U (View source)
-      ];
+      if (e.key === 'F12') { e.preventDefault(); logViolation('F12_KEY', 'DevTools shortcut'); return; }
+      if (e.key === 'F5')  { e.preventDefault(); logViolation('REFRESH', 'Page refresh attempted'); return; }
 
-      // Block F12 (DevTools)
-      if (e.key === 'F12') {
-        e.preventDefault();
-        logViolation('F12_KEY', 'Attempted to open developer tools');
-        return false;
+      if (e.ctrlKey && e.shiftKey && ['I', 'J', 'C'].includes(e.key.toUpperCase())) {
+        e.preventDefault(); logViolation('DEVTOOLS_SHORTCUT', `Ctrl+Shift+${e.key}`); return;
+      }
+      if (e.ctrlKey && e.shiftKey && e.key.toUpperCase() === 'N') {
+        e.preventDefault(); logViolation('INCOGNITO_WINDOW', 'Incognito window attempted'); return;
       }
 
-      // Block Ctrl+Shift+I (DevTools)
-      if (e.ctrlKey && e.shiftKey && e.key === 'I') {
-        e.preventDefault();
-        logViolation('DEVTOOLS_SHORTCUT', 'Attempted to open developer tools');
-        return false;
-      }
+      if (e.ctrlKey && e.key.toLowerCase() === 'u') { e.preventDefault(); logViolation('VIEW_SOURCE', 'View source'); return; }
+      if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); logViolation('SAVE_PAGE', 'Save page'); return; }
+      if (e.ctrlKey && e.key.toLowerCase() === 'p') { e.preventDefault(); logViolation('PRINT', 'Print page'); return; }
+      if (e.ctrlKey && e.key.toLowerCase() === 'v') { e.preventDefault(); logViolation('PASTE_SHORTCUT', 'Paste shortcut'); return; }
+      if (e.ctrlKey && e.key.toLowerCase() === 'x') { e.preventDefault(); logViolation('CUT_SHORTCUT', 'Cut shortcut'); return; }
+      if (e.ctrlKey && e.key.toLowerCase() === 'w') { e.preventDefault(); logViolation('CLOSE_TAB', 'Close tab attempted'); return; }
+      if (e.ctrlKey && e.key.toLowerCase() === 'n') { e.preventDefault(); logViolation('NEW_WINDOW', 'New window attempted'); return; }
+      if (e.ctrlKey && e.key.toLowerCase() === 't') { e.preventDefault(); logViolation('NEW_TAB', 'New tab attempted'); return; }
+      if (e.ctrlKey && e.key.toLowerCase() === 'r') { e.preventDefault(); logViolation('REFRESH', 'Page refresh attempted'); return; }
 
-      // Block Ctrl+Shift+J (Console)
-      if (e.ctrlKey && e.shiftKey && e.key === 'J') {
-        e.preventDefault();
-        logViolation('CONSOLE_SHORTCUT', 'Attempted to open console');
-        return false;
-      }
+      if (e.key === 'PrintScreen') { e.preventDefault(); logViolation('PRINT_SCREEN', 'Screenshot attempted'); return; }
 
-      // Block Ctrl+Shift+C (Element inspector)
-      if (e.ctrlKey && e.shiftKey && e.key === 'C') {
-        e.preventDefault();
-        logViolation('INSPECTOR_SHORTCUT', 'Attempted to open element inspector');
-        return false;
-      }
+      if (e.altKey && e.key === 'Tab') { e.preventDefault(); logViolation('ALT_TAB', 'App switch attempted'); return; }
+      if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); logViolation('BROWSER_NAV', 'Browser navigation'); return; }
 
-      // Block Ctrl+U (View source)
-      if (e.ctrlKey && e.key === 'u') {
-        e.preventDefault();
-        logViolation('VIEW_SOURCE', 'Attempted to view page source');
-        return false;
-      }
+      if (e.metaKey && e.key === 'Tab') { e.preventDefault(); logViolation('CMD_TAB', 'App switch attempted'); return; }
+      if (e.metaKey && e.key.toLowerCase() === 'd') { e.preventDefault(); logViolation('WIN_SHOW_DESKTOP', 'Show desktop attempted'); return; }
 
-      // Block Ctrl+S (Save page)
-      if (e.ctrlKey && e.key === 's') {
-        e.preventDefault();
-        logViolation('SAVE_PAGE', 'Attempted to save page');
-        return false;
-      }
+      if (e.key === 'Escape' && checkFullscreen()) { e.preventDefault(); return; }
 
-      // Block Ctrl+P (Print)
-      if (e.ctrlKey && e.key === 'p') {
-        e.preventDefault();
-        logViolation('PRINT', 'Attempted to print page');
-        return false;
-      }
-
-      // Block PrintScreen key
-      if (e.key === 'PrintScreen') {
-        e.preventDefault();
-        logViolation('PRINT_SCREEN', 'Attempted to take screenshot');
-        return false;
-      }
-
-      // Block Ctrl+C (Copy) - already handled by copy event, but double-check
-      if (e.ctrlKey && e.key === 'c' && !e.shiftKey) {
-        const selection = window.getSelection();
-        if (selection && selection.toString().length > 0) {
-          e.preventDefault();
-          logViolation('COPY_SHORTCUT', 'Attempted to copy with keyboard');
-          return false;
-        }
-      }
-
-      // Block Ctrl+V (Paste)
-      if (e.ctrlKey && e.key === 'v') {
-        e.preventDefault();
-        logViolation('PASTE_SHORTCUT', 'Attempted to paste with keyboard');
-        return false;
-      }
-
-      // Block Ctrl+X (Cut)
-      if (e.ctrlKey && e.key === 'x') {
-        e.preventDefault();
-        logViolation('CUT_SHORTCUT', 'Attempted to cut with keyboard');
-        return false;
-      }
-
-      // Block Alt+Tab (Windows) - Limited effectiveness
-      if (e.altKey && e.key === 'Tab') {
-        e.preventDefault();
-        logViolation('ALT_TAB', 'Attempted to switch applications');
-        return false;
-      }
-
-      // Block Cmd+Tab (Mac) - Limited effectiveness
-      if (e.metaKey && e.key === 'Tab') {
-        e.preventDefault();
-        logViolation('CMD_TAB', 'Attempted to switch applications');
-        return false;
-      }
-
-      // Block browser back/forward navigation
-      if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-        e.preventDefault();
-        logViolation('BROWSER_NAVIGATION', 'Attempted to navigate with keyboard');
-        return false;
-      }
+      if (e.key === 'Meta' || e.key === 'OS') { e.preventDefault(); logViolation('WIN_KEY', 'Win key pressed'); return; }
     };
 
-    // === 4. PREVENT BROWSER BACK/FORWARD NAVIGATION ===
+    // === 4. PREVENT BROWSER BACK/FORWARD ===
     const handlePopState = (e) => {
       e.preventDefault();
       window.history.pushState(null, '', window.location.href);
-      logViolation('BACK_BUTTON', 'Attempted to use browser back button');
+      logViolation('BACK_BUTTON', 'Back button attempted');
     };
 
-    // === 5. DETECT TAB SWITCHING (visibility change) ===
+    // === 5. TAB SWITCHING WITH EXTENDED ABSENCE DETECTION ===
     const handleVisibilityChange = () => {
       if (document.hidden) {
         tabSwitchCountRef.current += 1;
-        logViolation('TAB_SWITCH', `User switched tabs or minimized window (Count: ${tabSwitchCountRef.current})`);
-        
-        // Show warning only once every 30 seconds to prevent spam
         const now = Date.now();
-        if (now - lastTabSwitchWarningRef.current > 30000) {
-          toast.error(`⚠️ Tab switch detected! Count: ${tabSwitchCountRef.current}`);
+        if (now - lastTabSwitchWarningRef.current > 10000) {
+          toast.error(`Tab switch detected! (${tabSwitchCountRef.current}x)`);
           lastTabSwitchWarningRef.current = now;
         }
-        
-        if (onTabSwitch) {
-          onTabSwitch({
-            count: tabSwitchCountRef.current,
-            timestamp: new Date().toISOString(),
-          });
+        if (onTabSwitchRef.current) {
+          onTabSwitchRef.current({ count: tabSwitchCountRef.current, timestamp: new Date().toISOString() });
+        }
+        tabHiddenTimerRef.current = setTimeout(() => {
+          if (document.hidden) {
+            logViolation('EXTENDED_TAB_ABSENCE', 'Tab hidden for more than 8 seconds');
+            toast.error('Extended tab absence detected!');
+            if (onWindowBlurRef.current) {
+              onWindowBlurRef.current({ timestamp: new Date().toISOString(), reason: 'extended_absence' });
+            }
+          }
+        }, 8000);
+      } else {
+        if (tabHiddenTimerRef.current) {
+          clearTimeout(tabHiddenTimerRef.current);
+          tabHiddenTimerRef.current = null;
         }
       }
     };
 
-    // === 6. DETECT WINDOW FOCUS LOSS ===
+    // === 6. WINDOW FOCUS LOSS ===
     const handleWindowBlur = () => {
       logViolation('WINDOW_BLUR', 'Window lost focus');
-      
-      // Show warning only once every 30 seconds to prevent spam
       const now = Date.now();
-      if (now - lastWindowBlurWarningRef.current > 30000) {
-        toast.warning('⚠️ Window focus lost! Stay on the exam page');
+      if (now - lastWindowBlurWarningRef.current > 10000) {
+        toast.warning('Window focus lost! Return to exam.');
         lastWindowBlurWarningRef.current = now;
       }
-      
-      if (onWindowBlur) {
-        onWindowBlur({
-          timestamp: new Date().toISOString(),
-        });
+      if (onWindowBlurRef.current) {
+        onWindowBlurRef.current({ timestamp: new Date().toISOString() });
       }
-    };
-
-    const handleWindowFocus = () => {
-      // Optional: Log when focus is regained
-      console.log('✅ Window focus regained');
     };
 
     // === 7. FULLSCREEN ENFORCEMENT ===
     const handleFullscreenChange = () => {
-      const isCurrentlyFullscreen = checkFullscreen();
-      isFullscreenRef.current = isCurrentlyFullscreen;
-
-      if (!isCurrentlyFullscreen && enforceFullscreen) {
-        logViolation('FULLSCREEN_EXIT', 'User exited fullscreen mode');
-        
-        // Show warning only once every 30 seconds to prevent spam
+      const isFS = checkFullscreen();
+      isFullscreenRef.current = isFS;
+      if (!isFS && enforceFullscreen) {
+        logViolation('FULLSCREEN_EXIT', 'User exited fullscreen');
         const now = Date.now();
-        if (now - lastFullscreenWarningRef.current > 30000) {
-          toast.warning('⚠️ Fullscreen mode exited! Please return to fullscreen');
+        if (now - lastFullscreenWarningRef.current > 10000) {
+          toast.warning('Fullscreen exited! Returning to fullscreen...');
           lastFullscreenWarningRef.current = now;
         }
-        
-        // Attempt to re-enter fullscreen after a short delay
-        setTimeout(() => {
-          if (!checkFullscreen()) {
-            enterFullscreen();
-          }
-        }, 1000);
+        setTimeout(() => { if (!checkFullscreen()) enterFullscreen(); }, 800);
       }
     };
 
-    // === ATTACH EVENT LISTENERS ===
-    
-    // Right-click
+    // === 8. CLIPBOARD CHANGE DETECTION ===
+    const handleClipboardChange = () => {
+      logViolation('CLIPBOARD_CHANGE', 'Clipboard content changed');
+    };
+
+    // === 9. MOUSE LEAVE DETECTION ===
+    const handleMouseLeave = (e) => {
+      if (e.relatedTarget === null) {
+        const now = Date.now();
+        if (now - lastMouseLeaveWarningRef.current > 15000) {
+          lastMouseLeaveWarningRef.current = now;
+          logViolation('MOUSE_LEAVE', 'Mouse left the document window');
+          toast.warning('Mouse left exam window!');
+          if (onWindowBlurRef.current) {
+            onWindowBlurRef.current({ timestamp: new Date().toISOString(), reason: 'mouse_leave' });
+          }
+        }
+      }
+    };
+
+    // === 10. BEFOREUNLOAD WARNING ===
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+      logViolation('PAGE_EXIT', 'Attempted to close/navigate away');
+    };
+
+    // === 11. PAGEHIDE (mobile tab switch) ===
+    const handlePageHide = () => {
+      logViolation('PAGE_HIDE', 'Page hidden (possible mobile tab switch)');
+    };
+
+    // === ATTACH LISTENERS ===
     document.addEventListener('contextmenu', handleContextMenu);
-    
-    // Copy/Cut/Paste
     document.addEventListener('copy', handleCopy);
     document.addEventListener('cut', handleCut);
     document.addEventListener('paste', handlePaste);
-    
-    // Keyboard shortcuts
-    document.addEventListener('keydown', handleKeyDown, true); // Use capture phase
-    
-    // Browser navigation
+    document.addEventListener('keydown', handleKeyDown, true);
     window.history.pushState(null, '', window.location.href);
     window.addEventListener('popstate', handlePopState);
-    
-    // Tab switching
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    // Window focus
     window.addEventListener('blur', handleWindowBlur);
-    window.addEventListener('focus', handleWindowFocus);
-    
-    // Fullscreen
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
     document.addEventListener('mozfullscreenchange', handleFullscreenChange);
     document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    document.addEventListener('mouseleave', handleMouseLeave);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handlePageHide);
+    if (navigator.clipboard && 'onchange' in navigator.clipboard) {
+      navigator.clipboard.addEventListener('change', handleClipboardChange);
+    }
 
-    // === CLEANUP ON UNMOUNT ===
     const cleanup = () => {
       document.removeEventListener('contextmenu', handleContextMenu);
       document.removeEventListener('copy', handleCopy);
@@ -352,36 +235,29 @@ const useBrowserLockdown = ({
       window.removeEventListener('popstate', handlePopState);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
-      window.removeEventListener('focus', handleWindowFocus);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
       document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
       document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+      document.removeEventListener('mouseleave', handleMouseLeave);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handlePageHide);
+      if (navigator.clipboard && 'onchange' in navigator.clipboard) {
+        navigator.clipboard.removeEventListener('change', handleClipboardChange);
+      }
+      if (tabHiddenTimerRef.current) {
+        clearTimeout(tabHiddenTimerRef.current);
+        tabHiddenTimerRef.current = null;
+      }
     };
 
-    // Enter fullscreen on mount if enforced
     if (enforceFullscreen) {
-      const timer = setTimeout(() => {
-        enterFullscreen();
-      }, 500);
-
-      return () => {
-        clearTimeout(timer);
-        cleanup();
-      };
+      const timer = setTimeout(() => enterFullscreen(), 500);
+      return () => { clearTimeout(timer); cleanup(); };
     }
 
     return cleanup;
-  }, [
-    enabled,
-    enforceFullscreen,
-    onViolation,
-    onTabSwitch,
-    onWindowBlur,
-    logViolation,
-    enterFullscreen,
-    checkFullscreen,
-  ]);
+  }, [enabled, enforceFullscreen, logViolation, enterFullscreen, checkFullscreen]);
 
   return {
     isFullscreen: isFullscreenRef.current,

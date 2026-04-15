@@ -29,6 +29,47 @@ const examSchema = mongoose.Schema(
       default: uuidv4, // Generate a new UUID for each document
       unique: true, // Ensure uniqueness of UUIDs
     },
+    // Optional metadata fields
+    description: {
+      type: String,
+      default: '',
+    },
+    subject: {
+      type: String,
+      default: '',
+    },
+    instructions: {
+      type: String,
+      default: '',
+    },
+    passingScore: {
+      type: Number,
+      default: 60,
+    },
+    marksPerQuestion: {
+      type: Number,
+      default: 1,
+    },
+    negativeMarking: {
+      type: Number,
+      default: 0,
+    },
+    maxAttempts: {
+      type: Number,
+      default: 1,
+    },
+    shuffleQuestions: {
+      type: Boolean,
+      default: false,
+    },
+    allowReview: {
+      type: Boolean,
+      default: true,
+    },
+    tags: {
+      type: [String],
+      default: [],
+    },
     // Teacher who created the exam
     teacher: {
       type: mongoose.Schema.Types.ObjectId,
@@ -46,6 +87,11 @@ const examSchema = mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Indexes for query performance
+examSchema.index({ teacher: 1, liveDate: -1 });
+examSchema.index({ liveDate: 1, deadDate: 1 });
+examSchema.index({ eligibleStudents: 1 });
 
 const Exam = mongoose.model("Exam", examSchema);
 

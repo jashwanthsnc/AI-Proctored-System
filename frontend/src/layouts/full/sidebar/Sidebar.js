@@ -1,24 +1,38 @@
 import { useMediaQuery, Box, Drawer, Typography } from '@mui/material';
-import Logo from '../shared/logo/Logo';
 import SidebarItems from './SidebarItems';
-// import { Upgrade } from './Updrade';
 
 const Sidebar = (props) => {
   const lgUp = useMediaQuery((theme) => theme.breakpoints.up('md'));
+  const sidebarWidth = '260px';
 
-  const sidebarWidth = '270px';
+  const BrandLogo = () => (
+    <Box sx={{ display: 'flex', alignItems: 'center', px: 2.5, py: 2, gap: 1.5 }}>
+      <Box sx={{
+        width: 32,
+        height: 32,
+        borderRadius: '8px',
+        background: '#0A84FF',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}>
+        <Typography sx={{ fontWeight: 800, color: '#fff', fontSize: '0.75rem', letterSpacing: '-1px', fontFamily: 'Inter, sans-serif' }}>AP</Typography>
+      </Box>
+      <Box>
+        <Typography sx={{ fontWeight: 700, fontSize: '0.9375rem', color: '#FFFFFF', letterSpacing: '-0.03em', lineHeight: 1.2, fontFamily: 'Inter, sans-serif' }}>
+          ATE-PROT
+        </Typography>
+        <Typography sx={{ fontWeight: 400, fontSize: '0.625rem', color: 'rgba(235,235,245,0.3)', letterSpacing: '0.05em', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif' }}>
+          Proctored Exams
+        </Typography>
+      </Box>
+    </Box>
+  );
 
   if (lgUp) {
     return (
-      <Box
-        sx={{
-          width: sidebarWidth,
-          flexShrink: 0,
-        }}
-      >
-        {/* ------------------------------------------- */}
-        {/* Sidebar for desktop */}
-        {/* ------------------------------------------- */}
+      <Box sx={{ width: sidebarWidth, flexShrink: 0 }}>
         <Drawer
           anchor="left"
           open={props.isSidebarOpen}
@@ -30,51 +44,11 @@ const Sidebar = (props) => {
             },
           }}
         >
-          {/* ------------------------------------------- */}
-          {/* Sidebar Box */}
-          {/* ------------------------------------------- */}
-          <Box
-            sx={{
-              height: '100%',
-            }}
-          >
-            {/* ------------------------------------------- */}
-            {/* Logo */}
-            {/* ------------------------------------------- */}
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                px: 3,
-                py: 2,
-                width: '100%',
-                gap: 2, // adds spacing between logo and text
-              }}
-            >
-              <Logo />
-
-              <Typography
-                variant="h2"
-                sx={{
-                  fontWeight: 600,
-                  fontSize: '1.2rem',
-                  color: 'primary.main',
-                  // ml: 10, // ❌ remove this as it pushes it too far right
-                  // mt: 1,  // ❌ remove unnecessary top margin
-                  whiteSpace: 'nowrap',
-                  mr: 5,
-                }}
-              >
-                ATE-PROT
-              </Typography>
-            </Box>
-
-            <Box>
-              {/* ------------------------------------------- */}
-              {/* Sidebar Items */}
-              {/* ------------------------------------------- */}
+          <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <BrandLogo />
+            <Box sx={{ width: '90%', mx: 'auto', height: '0.5px', backgroundColor: 'rgba(84,84,88,0.65)' }} />
+            <Box sx={{ flex: 1, overflow: 'auto', pt: 0.5 }}>
               <SidebarItems />
-              {/* <Upgrade /> */}
             </Box>
           </Box>
         </Drawer>
@@ -91,40 +65,17 @@ const Sidebar = (props) => {
       PaperProps={{
         sx: {
           width: sidebarWidth,
-          boxShadow: (theme) => theme.shadows[8],
+          boxShadow: '20px 0 60px rgba(0,0,0,0.8)',
         },
       }}
     >
-      {/* ------------------------------------------- */}
-      {/* Logo */}
-      {/* ------------------------------------------- */}
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          px: 2,
-          py: 2,
-          width: '100%',
-        }}
-      >
-        <Logo />
-        <Typography
-          variant="h6"
-          sx={{
-            fontWeight: 600,
-            fontSize: '1.2rem',
-            color: 'primary.main',
-            ml: 1,
-          }}
-        >
-          AI EVAL_8
-        </Typography>
+      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <BrandLogo />
+        <Box sx={{ width: '90%', mx: 'auto', height: '0.5px', backgroundColor: 'rgba(84,84,88,0.65)' }} />
+        <Box sx={{ flex: 1, overflow: 'auto', pt: 0.5 }}>
+          <SidebarItems />
+        </Box>
       </Box>
-      {/* ------------------------------------------- */}
-      {/* Sidebar For Mobile */}
-      {/* ------------------------------------------- */}
-      <SidebarItems />
-      {/* <Upgrade /> */}
     </Drawer>
   );
 };

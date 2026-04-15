@@ -14,8 +14,8 @@ const Dashboard = () => {
         // Teachers go to their dashboard
         navigate('/teacher-dashboard', { replace: true });
       } else {
-        // Students go to their exam listing
-        navigate('/exam', { replace: true });
+        // Students go to their personal dashboard
+        navigate('/student-dashboard', { replace: true });
       }
     }
   }, [userInfo, navigate]);

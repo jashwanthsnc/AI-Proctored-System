@@ -1,6 +1,9 @@
 # Node modules
 node_modules/
 
+# Claude Code personal memory/plans (machine-specific)
+.claude/
+
 # Environment variables
 .env
 

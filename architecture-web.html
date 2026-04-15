@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AI Proctored System — Architecture</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0a0f;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    padding: 32px 20px;
+    min-height: 100vh;
+  }
+  h1 {
+    text-align: center;
+    color: #fff;
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .sub {
+    text-align: center;
+    color: #555;
+    font-size: 12px;
+    margin-bottom: 32px;
+  }
+  .mermaid {
+    background: #0a0a0f;
+    display: flex;
+    justify-content: center;
+  }
+  .mermaid svg {
+    max-width: 100%;
+    height: auto;
+  }
+</style>
+</head>
+<body>
+
+<h1>AI Proctored Examination System — Architecture</h1>
+<p class="sub">React 18 · Express · MongoDB · TensorFlow.js · Socket.io · Uploadcare</p>
+
+<div class="mermaid">
+%%{init: {
+  "theme": "dark",
+  "themeVariables": {
+    "background": "#0a0a0f",
+    "primaryColor": "#0d1a2e",
+    "primaryTextColor": "#e0e0e0",
+    "primaryBorderColor": "#0a84ff",
+    "lineColor": "#3a3a55",
+    "secondaryColor": "#1a0d2e",
+    "tertiaryColor": "#0d2218",
+    "edgeLabelBackground": "#131318",
+    "clusterBkg": "#131318",
+    "clusterBorder": "#2a2a38",
+    "titleColor": "#ffffff",
+    "fontFamily": "Segoe UI, system-ui, sans-serif",
+    "fontSize": "13px",
+    "nodeBorder": "#0a84ff",
+    "mainBkg": "#0d1a2e"
+  }
+}}%%
+
+flowchart TD
+
+  %% ── ACTORS ──────────────────────────────────────────────
+  STU(["👨‍🎓 Student"])
+  TCH(["👩‍🏫 Teacher"])
+
+  %% ── AUTH ────────────────────────────────────────────────
+  subgraph AUTH["🔐 Authentication Layer"]
+    direction LR
+    LOGIN["Login\n/auth/login"]
+    REG["Register\n/auth/register"]
+    PRIV["PrivateRoute\nGuard"]
+    TGUARD["TeacherRoute\nGuard"]
+    JWT_S["JWT stored\nin Redux authSlice"]
+  end
+
+  %% ── STUDENT PAGES ───────────────────────────────────────
+  subgraph SPAGES["👨‍🎓 Student Journey"]
+    direction LR
+    SDASH["🏠 My Dashboard\n/student-dashboard"]
+    EXAM_B["📋 Browse Exams\n/exam"]
+    EDET["📄 Exam Details\n/exam/:examId"]
+    TP["⭐ TestPage\n/exam/:examId/:testId"]
+    RESULT["📊 Results\n/result"]
+    CODE["💻 Code Editor\n/exam/:examId/code"]
+  end
+
+  %% ── TEACHER PAGES ───────────────────────────────────────
+  subgraph TPAGES["👩‍🏫 Teacher Journey (teacherOnly)"]
+    direction LR
+    TDASH["📊 Teacher Dashboard\n/teacher-dashboard"]
+    ANALYTICS["📈 Analytics\n/analytics"]
+    CREATE["➕ Create Exam\n/create-exam"]
+    ADDQ["❓ Add Questions\n/add-questions"]
+    ALLEXAMS["📋 All Exams\n/all-exams"]
+    EDIT["✏️ Edit Exam\n/edit-exam/:id"]
+    STUDENTS["👥 Students\n/students"]
+    LIVE["🔴 Live Proctoring\n/live-proctoring"]
+    LOG["📜 Exam Log\n/exam-log"]
+  end
+
+  %% ── AI DETECTION ────────────────────────────────────────
+  subgraph AI["🤖 AI Detection Engine — Active During Exam"]
+    direction TB
+    EYE["👁️ Eye Gaze Tracking\nMediaPipe 6-pt · Head Yaw\n3-frame sustained · 5→3→2s cooldown\nSeverity: mild/moderate/severe"]
+    CAM["📷 Webcam AI\nCOCO-SSD TF.js · No/Multi Face\nPhone ≥0.55 · Objects ≥0.50\n2-of-3 buffer · 1400ms interval"]
+    AUD["🔊 Audio Monitor\nWeb Audio API\nNoise threshold · Volume spike"]
+    LOCK["🔒 Browser Lockdown\nTab/Window switch\nCtrl+W/N/T/R/F5 blocked\nMouse leave · 8s absence"]
+    EXTD["🖥️ External Display\nscreen.isExtended\nMulti-monitor detect"]
+    DEV["🛠️ DevTools Detect\nWindow size delta\nRate-limited 30s"]
+    NET["🌐 Network Monitor\nNavigator.onLine\nConnection events"]
+    SHOT["📸 Screenshot Capture\nWebcam canvas grab\nUploadcare CDN\nPeriodic 90s + every violation\n10 type enum tags"]
+  end
+
+  %% ── STATE ───────────────────────────────────────────────
+  subgraph STATE["⚡ Frontend State Management"]
+    direction TB
+    REDUX["🗄️ Redux Toolkit Store\nauthSlice · examApiSlice\ncheatingLogApiSlice\nuserApiSlice · resultApiSlice\nRTK Query for all API calls"]
+    CTX["⚠️ CheatingLogContext\nnoFaceCount · multipleFaceCount\ncellPhoneCount · gazeViolationCount\naudioViolationCount · tabSwitchCount\nlockdownCount · externalDisplayCount\nscreenshots[] · auto-save 30s"]
+    MDLS["🧠 modelSingleton.js\nCOCO-SSD + MediaPipe\nLazy load once · shared"]
+  end
+
+  %% ── SOCKET ──────────────────────────────────────────────
+  subgraph RT["🔴 Real-Time — Socket.io"]
+    direction LR
+    SOCK["Socket.io Server"]
+    SE["Student emits:\nexam:join\nviolation:detected\nheartbeat 15s"]
+    SB["Server broadcasts:\nactive-students\nrecent-violations\nproctoring-stats"]
+  end
+
+  %% ── BACKEND ─────────────────────────────────────────────
+  subgraph BE["⚙️ Backend — Express.js"]
+    direction TB
+
+    subgraph MW["Middleware"]
+      direction LR
+      PROTECT["protect\n(verify JWT)"]
+      TONLY["teacherOnly\n(role check)"]
+      ELIG["checkExamEligibility"]
+    end
+
+    subgraph ROUTES["REST Routes /api"]
+      direction TB
+      UR["User Routes\nPOST /users · POST /users/auth\nPOST /users/logout\nGET/PUT /users/profile\nGET /users"]
+      ER["Exam Routes\nGET/POST /exam\nGET /exam/active-students ⭐\nGET /exam/recent-violations ⭐\nGET /exam/proctoring-stats ⭐\nPUT/POST /exam/:examId\nPOST /exam/:examId/duplicate\nGET/POST/DEL /exam/:examId/students\nPOST /exam/questions\nGET /exam/questions/:examId\nPOST /cheatingLogs\nGET /cheatingLogs/:examId\nGET /allCheatingLogs"]
+      RR["Result Routes\nPOST /result\nGET /result\nGET /result/:id"]
+    end
+
+    subgraph CTRL["Controllers"]
+      direction LR
+      UC["userController\nregister · login · logout\ngetProfile · updateProfile\ngetAllUsers"]
+      EC["examController\ncreateExam · getExams\nupdateExam · deleteExam\nduplicateExam\nassignStudents"]
+      CC["cheatingLogController\nsaveCheatingLog\n$findOneAndUpdate upsert\ngetActiveStudents\ngetRecentViolations\ngetProctoringStats"]
+      RC["resultController\nsubmitResult\ngetAllResults\ngetResultByExamId"]
+      QC["quesController\ncreateQuestion\ngetQuestions\nupdateQuestion\ndeleteQuestion"]
+    end
+  end
+
+  %% ── DATABASE ────────────────────────────────────────────
+  subgraph DB["🍃 MongoDB Atlas — Mongoose ODM"]
+    direction LR
+    UDB[("👤 Users\n_id · name · email\npassword bcrypt\nrole: student|teacher\npic URL")]
+    EDB[("📋 Exams\n_id · examName · subject\nduration · totalMarks\nnegativeMarking\nshuffleQuestions\nstartDate · endDate\neligibleStudents[]\nshowResults · active")]
+    QDB[("❓ Questions\n_id · examId ref\nquestion · options[]\ncorrectAnswer · marks\nnegativeMarks")]
+    RDBX[("📊 Results\n_id · student ref\nexam ref · score\npercentage · passed\nanswers[] · timeTaken\nshowToStudent")]
+    CDB[("⚠️ CheatingLogs\n_id · student ref · exam ref\nnoFaceCount · multipleFaceCount\ncellPhoneCount · gazeViolationCount\naudioViolationCount · tabSwitchCount\nlockdownCount · externalDisplayCount\nscreenshots[]{url, type, timestamp}\ntype enum: periodic|noFace|multipleFace\ncellPhone|prohibitedObject|gazeViolation\ntabSwitch|lockdown|audioViolation\nexternalDisplay")]
+  end
+
+  %% ── EXTERNAL SERVICES ───────────────────────────────────
+  subgraph EXT["☁️ External Services"]
+    direction LR
+    UPC["📸 Uploadcare CDN\nScreenshot storage\npublicKey: e69ab6e5..."]
+    TFJS["🧠 TensorFlow.js\nCOCO-SSD model\nclient-side only"]
+    MP["👁️ MediaPipe\nBlazeFace 6-keypoint\nclient-side only"]
+    JWTX["🔑 JWT\nStateless tokens\njsonwebtoken"]
+    BCR["🔒 bcryptjs\nPassword hashing\nsalt rounds: 10"]
+  end
+
+  %% ════════════════ CONNECTIONS ════════════════
+
+  %% Actors → Auth
+  STU --> LOGIN
+  TCH --> LOGIN
+  STU --> REG
+  LOGIN --> JWT_S
+  JWT_S --> PRIV
+  PRIV --> SDASH
+  PRIV --> TDASH
+  TGUARD --> TDASH
+
+  %% Student flow
+  SDASH --> EXAM_B --> EDET --> TP --> RESULT
+  EDET --> CODE
+
+  %% Teacher flow
+  TDASH --> ANALYTICS
+  TDASH --> CREATE --> ADDQ
+  TDASH --> ALLEXAMS --> EDIT
+  TDASH --> STUDENTS
+  TDASH --> LIVE
+  TDASH --> LOG
+
+  %% TestPage → AI Hooks
+  TP -->|useEyeGazeTracking| EYE
+  TP -->|WebCam component| CAM
+  TP -->|useAudioMonitoring| AUD
+  TP -->|useBrowserLockdown| LOCK
+  TP -->|useExternalDisplay| EXTD
+  TP -->|useDevToolsDetection| DEV
+  TP -->|useNetworkMonitoring| NET
+
+  %% All detection → Screenshot
+  EYE -->|onGazeViolation| SHOT
+  CAM -->|onViolation| SHOT
+  AUD -->|onNoiseDetected| SHOT
+  LOCK -->|onTabSwitch / onBlur| SHOT
+  EXTD -->|onDisplayViolation| SHOT
+  DEV -->|onDevToolsDetected| SHOT
+
+  %% All detection → CheatingLogContext
+  EYE --> CTX
+  CAM --> CTX
+  AUD --> CTX
+  LOCK --> CTX
+  EXTD --> CTX
+
+  %% Screenshot → Uploadcare → Context
+  SHOT -->|upload| UPC
+  UPC -->|CDN URL appended| CTX
+
+  %% Model singleton
+  MDLS --> TFJS
+  MDLS --> MP
+  CAM --> MDLS
+  EYE --> MDLS
+
+  %% Socket.io
+  TP --> SE --> SOCK
+  SOCK --> SB --> LIVE
+
+  %% Frontend → Backend
+  REDUX -->|RTK Query| UR
+  REDUX -->|RTK Query| ER
+  REDUX -->|RTK Query| RR
+  CTX -->|POST /cheatingLogs auto-save + submit| ER
+
+  %% Middleware
+  UR --> PROTECT
+  ER --> PROTECT
+  ER --> TONLY
+  ER --> ELIG
+
+  %% Routes → Controllers
+  UR --> UC
+  ER --> EC
+  ER --> CC
+  ER --> QC
+  RR --> RC
+
+  %% Controllers → DB
+  UC --> UDB
+  EC --> EDB
+  QC --> QDB
+  RC --> RDBX
+  CC --> CDB
+
+  %% Auth services
+  UC --> JWTX
+  UC --> BCR
+
+  %% Socket → controller
+  SOCK --> CC
+
+  %% DB relations
+  EDB -.->|eligibleStudents ref| UDB
+  QDB -.->|examId ref| EDB
+  RDBX -.->|student + exam ref| UDB
+  CDB -.->|student + exam ref| UDB
+
+  %% ════════════════ STYLES ════════════════
+
+  classDef actor     fill:#1a0d2e,stroke:#bf5af2,color:#d480ff,font-weight:bold
+  classDef auth      fill:#0d1a2e,stroke:#0a84ff,color:#60b0ff
+  classDef student   fill:#0d2028,stroke:#64d2ff,color:#90e0ff
+  classDef testpage  fill:#2a1a0d,stroke:#ff9f0a,color:#ffb84d,font-weight:bold
+  classDef teacher   fill:#1a0d2e,stroke:#bf5af2,color:#d480ff
+  classDef live      fill:#2a0d0d,stroke:#ff453a,color:#ff7070
+  classDef ai        fill:#1a150a,stroke:#ff9f0a,color:#ffb84d
+  classDef cam       fill:#0d1a15,stroke:#30d158,color:#50e880
+  classDef audio     fill:#1a0d0d,stroke:#ff453a,color:#ff7070
+  classDef lockdown  fill:#0d1520,stroke:#0a84ff,color:#60b0ff
+  classDef display   fill:#0d1520,stroke:#64d2ff,color:#90e0ff
+  classDef devtools  fill:#1a1a0d,stroke:#bf5af2,color:#d480ff
+  classDef network   fill:#0d1a15,stroke:#5e5ce6,color:#9090ff
+  classDef shot      fill:#2a0d0d,stroke:#ff453a,color:#ff7070,font-weight:bold
+  classDef redux     fill:#0f0f28,stroke:#5e5ce6,color:#9090ff
+  classDef ctx       fill:#2a1a0d,stroke:#ff9f0a,color:#ffb84d
+  classDef model     fill:#131318,stroke:#3a3a48,color:#b0b0c0
+  classDef socket    fill:#2a0d0d,stroke:#ff453a,color:#ff7070
+  classDef mw        fill:#0d1a2e,stroke:#0a84ff,color:#60b0ff
+  classDef route     fill:#0d1a2e,stroke:#0a84ff44,color:#8e8ea0
+  classDef ctrl      fill:#131318,stroke:#3a3a48,color:#c0c0d0
+  classDef dbcol     fill:#0d2218,stroke:#30d158,color:#50e880
+  classDef ext       fill:#131318,stroke:#3a3a48,color:#8e8ea0
+
+  class STU,TCH actor
+  class LOGIN,REG,PRIV,TGUARD,JWT_S auth
+  class SDASH,EXAM_B,EDET,RESULT,CODE student
+  class TP testpage
+  class TDASH,ANALYTICS,CREATE,ADDQ,ALLEXAMS,EDIT,STUDENTS,LOG teacher
+  class LIVE live
+  class EYE ai
+  class CAM cam
+  class AUD audio
+  class LOCK lockdown
+  class EXTD display
+  class DEV devtools
+  class NET network
+  class SHOT shot
+  class REDUX redux
+  class CTX ctx
+  class MDLS model
+  class SOCK,SE,SB socket
+  class PROTECT,TONLY,ELIG mw
+  class UR,ER,RR route
+  class UC,EC,CC,RC,QC ctrl
+  class UDB,EDB,QDB,RDBX,CDB dbcol
+  class UPC,TFJS,MP,JWTX,BCR ext
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    flowchart: {
+      useMaxWidth: true,
+      htmlLabels: true,
+      curve: 'basis',
+      padding: 20,
+      nodeSpacing: 50,
+      rankSpacing: 60
+    },
+    themeVariables: {
+      background: '#0a0a0f',
+      primaryColor: '#0d1a2e',
+      primaryTextColor: '#e0e0e0',
+      primaryBorderColor: '#0a84ff',
+      lineColor: '#3a3a55',
+      secondaryColor: '#1a0d2e',
+      tertiaryColor: '#0d2218',
+      edgeLabelBackground: '#131318',
+      clusterBkg: '#131318',
+      clusterBorder: '#2a2a38',
+      titleColor: '#ffffff',
+      fontFamily: 'Segoe UI, system-ui, sans-serif',
+      fontSize: '13px'
+    }
+  });
+</script>
+
+</body>
+</html>

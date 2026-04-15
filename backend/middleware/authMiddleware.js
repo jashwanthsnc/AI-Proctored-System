@@ -16,6 +16,10 @@ const protect = asyncHandler(async (req, res, next) => {
       // this user will contain full bj including password we dont want to send it so we
       // remove it using -passowrd
       req.user = await User.findById(decoded.userId).select("-password");
+      if (!req.user) {
+        res.status(401);
+        throw new Error("Not Authorized, User not found");
+      }
       next();
     } catch (error) {
       res.status(401);
@@ -35,6 +39,26 @@ const teacherOnly = asyncHandler(async (req, res, next) => {
   } else {
     res.status(403);
     throw new Error("Access denied. Teachers only.");
+  }
+});
+
+// Middleware to check if user is an admin
+const adminOnly = asyncHandler(async (req, res, next) => {
+  if (req.user && req.user.role === "admin") {
+    next();
+  } else {
+    res.status(403);
+    throw new Error("Access denied. Admins only.");
+  }
+});
+
+// Middleware to check if user is admin or teacher
+const adminOrTeacher = asyncHandler(async (req, res, next) => {
+  if (req.user && (req.user.role === "admin" || req.user.role === "teacher")) {
+    next();
+  } else {
+    res.status(403);
+    throw new Error("Access denied. Admins and teachers only.");
   }
 });
 
@@ -70,4 +94,4 @@ const checkExamEligibility = asyncHandler(async (req, res, next) => {
   next();
 });
 
-export { protect, teacherOnly, checkExamEligibility };
+export { protect, teacherOnly, adminOnly, adminOrTeacher, checkExamEligibility };

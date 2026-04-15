@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Proctored System — Architecture Diagram</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0a0f;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    padding: 32px;
+    min-height: 100vh;
+  }
+  h1 {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: #6b7280;
+    margin-bottom: 36px;
+  }
+
+  /* ─── GRID ─── */
+  .arch {
+    display: grid;
+    grid-template-columns: 220px 1fr 220px;
+    grid-template-rows: auto auto auto auto;
+    gap: 20px;
+    max-width: 1300px;
+    margin: 0 auto;
+    align-items: start;
+  }
+
+  /* ─── PANELS ─── */
+  .panel {
+    border-radius: 14px;
+    border: 1px solid;
+    padding: 16px;
+  }
+  .panel-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .panel-title .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* colour themes */
+  .blue   { background: #0d1a2e; border-color: #0a84ff44; }
+  .blue   .panel-title { color: #0a84ff; }
+  .blue   .dot { background: #0a84ff; }
+
+  .purple { background: #1a0d2e; border-color: #bf5af244; }
+  .purple .panel-title { color: #bf5af2; }
+  .purple .dot { background: #bf5af2; }
+
+  .green  { background: #0d2218; border-color: #30d15844; }
+  .green  .panel-title { color: #30d158; }
+  .green  .dot { background: #30d158; }
+
+  .orange { background: #2a1a0d; border-color: #ff9f0a44; }
+  .orange .panel-title { color: #ff9f0a; }
+  .orange .dot { background: #ff9f0a; }
+
+  .red    { background: #2a0d0d; border-color: #ff453a44; }
+  .red    .panel-title { color: #ff453a; }
+  .red    .dot { background: #ff453a; }
+
+  .cyan   { background: #0d2028; border-color: #64d2ff44; }
+  .cyan   .panel-title { color: #64d2ff; }
+  .cyan   .dot { background: #64d2ff; }
+
+  .gray   { background: #131318; border-color: #3a3a4844; }
+  .gray   .panel-title { color: #8e8ea0; }
+  .gray   .dot { background: #8e8ea0; }
+
+  .indigo { background: #0f0f28; border-color: #5e5ce644; }
+  .indigo .panel-title { color: #5e5ce6; }
+  .indigo .dot { background: #5e5ce6; }
+
+  /* ─── PILLS / CHIPS ─── */
+  .chip-list { display: flex; flex-direction: column; gap: 6px; }
+  .chip {
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    white-space: nowrap;
+  }
+  .chip .icon { font-size: 13px; }
+
+  .chip-blue   { background: #0a84ff18; color: #60b0ff; border: 1px solid #0a84ff30; }
+  .chip-purple { background: #bf5af218; color: #d480ff; border: 1px solid #bf5af230; }
+  .chip-green  { background: #30d15818; color: #50e880; border: 1px solid #30d15830; }
+  .chip-orange { background: #ff9f0a18; color: #ffb84d; border: 1px solid #ff9f0a30; }
+  .chip-red    { background: #ff453a18; color: #ff7070; border: 1px solid #ff453a30; }
+  .chip-cyan   { background: #64d2ff18; color: #90e0ff; border: 1px solid #64d2ff30; }
+  .chip-gray   { background: #8e8ea018; color: #b0b0c0; border: 1px solid #8e8ea030; }
+  .chip-indigo { background: #5e5ce618; color: #9090ff; border: 1px solid #5e5ce630; }
+
+  /* ─── LAYOUT HELPERS ─── */
+  .col-left  { grid-column: 1; }
+  .col-mid   { grid-column: 2; }
+  .col-right { grid-column: 3; }
+  .col-full  { grid-column: 1 / -1; }
+  .col-mid-right { grid-column: 2 / 4; }
+  .col-left-mid  { grid-column: 1 / 3; }
+
+  /* ─── FLOW ARROWS SECTION ─── */
+  .flow-row {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+  .flow-box {
+    background: #131318;
+    border: 1px solid #2a2a38;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    color: #c0c0d0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    min-width: 110px;
+  }
+  .flow-box .label { font-size: 10px; color: #6b7280; font-weight: 400; }
+  .arrow {
+    display: flex;
+    align-items: center;
+    padding: 0 4px;
+    color: #3a3a55;
+    font-size: 18px;
+  }
+
+  /* ─── SECTION HEADINGS ─── */
+  .section-label {
+    grid-column: 1 / -1;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #3a3a55;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 4px 0 0;
+  }
+  .section-label::before,
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #1e1e2e;
+  }
+
+  /* ─── DETECTION GRID ─── */
+  .detect-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .detect-card {
+    border-radius: 10px;
+    padding: 12px 10px;
+    border: 1px solid;
+    text-align: center;
+  }
+  .detect-card .dc-icon { font-size: 20px; margin-bottom: 5px; }
+  .detect-card .dc-name { font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+  .detect-card .dc-detail { font-size: 10px; color: #6b7280; line-height: 1.4; }
+
+  /* ─── DB TABLES ─── */
+  .db-table {
+    border-radius: 8px;
+    background: #0d1a0d;
+    border: 1px solid #30d15820;
+    padding: 8px 10px;
+    margin-top: 8px;
+  }
+  .db-table-name { font-size: 11px; font-weight: 700; color: #30d158; margin-bottom: 5px; }
+  .db-field { font-size: 10px; color: #6b7280; line-height: 1.6; }
+  .db-field span { color: #50e880; }
+
+  /* ─── ROUTE TABLE ─── */
+  .route-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 4px 0;
+    border-bottom: 1px solid #1e1e2e;
+    font-size: 11px;
+  }
+  .route-row:last-child { border-bottom: none; }
+  .method {
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 38px;
+    text-align: center;
+  }
+  .get  { background: #0a84ff20; color: #0a84ff; border: 1px solid #0a84ff40; }
+  .post { background: #30d15820; color: #30d158; border: 1px solid #30d15840; }
+  .put  { background: #ff9f0a20; color: #ff9f0a; border: 1px solid #ff9f0a40; }
+  .del  { background: #ff453a20; color: #ff453a; border: 1px solid #ff453a40; }
+  .route-path { color: #8e8ea0; font-family: 'Consolas', monospace; font-size: 10px; flex: 1; }
+  .route-label { color: #6b7280; font-size: 10px; }
+
+  /* ─── LEGEND ─── */
+  .legend {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 32px;
+    padding-top: 20px;
+    border-top: 1px solid #1e1e2e;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #6b7280; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<h1>AI Proctored Examination System</h1>
+<p class="subtitle">Full-Stack Architecture · React 18 + Express + MongoDB + TensorFlow.js + Socket.io</p>
+
+<div class="arch">
+
+  <!-- ════════════════════════════════ USER FLOWS ════════════════════════════════ -->
+  <div class="section-label col-full">User Entry &amp; Authentication</div>
+
+  <!-- Auth panel -->
+  <div class="panel blue col-full" style="display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start; padding:16px 20px;">
+    <div>
+      <div class="panel-title"><span class="dot"></span>Authentication Layer</div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <div class="chip chip-blue"><span class="icon">🔐</span>JWT Login · /auth/login</div>
+        <div class="chip chip-blue"><span class="icon">📝</span>Register · /auth/register</div>
+        <div class="chip chip-gray"><span class="icon">👤</span>Role: student | teacher</div>
+        <div class="chip chip-gray"><span class="icon">🔑</span>bcrypt password hashing</div>
+        <div class="chip chip-gray"><span class="icon">💾</span>Redux Persist · authSlice</div>
+      </div>
+    </div>
+    <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+      <div style="background:#1a1a2e; border:1px solid #2a2a48; border-radius:8px; padding:8px 12px; font-size:11px; color:#8e8ea0;">
+        <div style="color:#0a84ff; font-weight:700; margin-bottom:4px;">Middleware Guards</div>
+        <div>protect (verify JWT)</div>
+        <div>teacherOnly (role check)</div>
+        <div>checkExamEligibility</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════ STUDENT FLOW ════════════════════════════════ -->
+  <div class="section-label col-full">Student Journey</div>
+
+  <div class="panel cyan col-full" style="padding:14px 20px;">
+    <div class="panel-title"><span class="dot"></span>Student Routes &amp; Pages</div>
+    <div class="flow-row" style="flex-wrap:wrap; gap:0;">
+      <div class="flow-box" style="border-color:#64d2ff40; background:#0d202814;">
+        <span>🏠</span>
+        <div>My Dashboard</div>
+        <div class="label">/student-dashboard</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box" style="border-color:#64d2ff40; background:#0d202814;">
+        <span>📋</span>
+        <div>Browse Exams</div>
+        <div class="label">/exam</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box" style="border-color:#64d2ff40; background:#0d202814;">
+        <span>📄</span>
+        <div>Exam Details</div>
+        <div class="label">/exam/:examId</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box" style="border-color:#ff9f0a60; background:#2a1a0d30; min-width:130px;">
+        <span>🎓</span>
+        <div style="color:#ff9f0a;">Test Page</div>
+        <div class="label">/exam/:examId/:testId</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box" style="border-color:#30d15840; background:#0d221814;">
+        <span>📊</span>
+        <div>Results</div>
+        <div class="label">/result</div>
+      </div>
+      <div style="flex:1; min-width:20px;"></div>
+      <div class="flow-box" style="border-color:#5e5ce640; background:#0f0f2814;">
+        <span>💻</span>
+        <div>Code Editor</div>
+        <div class="label">/exam/:examId/code</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════ TEACHER FLOW ════════════════════════════════ -->
+  <div class="section-label col-full">Teacher / Admin Journey</div>
+
+  <div class="panel purple col-full" style="padding:14px 20px;">
+    <div class="panel-title"><span class="dot"></span>Teacher Routes &amp; Pages (teacherOnly middleware)</div>
+    <div class="flow-row" style="flex-wrap:wrap; gap:0;">
+      <div class="flow-box" style="border-color:#bf5af240;">
+        <span>📊</span>
+        <div>Dashboard</div>
+        <div class="label">/teacher-dashboard</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box" style="border-color:#bf5af240;">
+        <span>📈</span>
+        <div>Analytics</div>
+        <div class="label">/analytics</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box" style="border-color:#bf5af240;">
+        <span>➕</span>
+        <div>Create Exam</div>
+        <div class="label">/create-exam</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box" style="border-color:#bf5af240;">
+        <span>❓</span>
+        <div>Add Questions</div>
+        <div class="label">/add-questions</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box" style="border-color:#bf5af240;">
+        <span>📋</span>
+        <div>All Exams</div>
+        <div class="label">/all-exams</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box" style="border-color:#bf5af240;">
+        <span>👥</span>
+        <div>Students</div>
+        <div class="label">/students</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box" style="border-color:#ff453a60; background:#2a0d0d30;">
+        <span style="color:#ff453a;">🔴</span>
+        <div style="color:#ff7070;">Live Proctor</div>
+        <div class="label">/live-proctoring</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-box" style="border-color:#bf5af240;">
+        <span>📜</span>
+        <div>Exam Log</div>
+        <div class="label">/exam-log</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════ AI DETECTION ════════════════════════════════ -->
+  <div class="section-label col-full">AI Proctoring Detection Systems (Client-Side · Active During Exam)</div>
+
+  <div class="panel orange col-full" style="padding:16px 20px;">
+    <div class="panel-title"><span class="dot"></span>Real-Time AI Detection Engine — TestPage.jsx orchestrates all hooks</div>
+    <div class="detect-grid">
+
+      <div class="detect-card" style="background:#1a150a; border-color:#ff9f0a30;">
+        <div class="dc-icon">👁️</div>
+        <div class="dc-name" style="color:#ff9f0a;">Eye Gaze Tracking</div>
+        <div class="dc-detail">MediaPipe 6-pt face<br/>Head yaw via ear keypoints<br/>3-frame sustained detection<br/>Adaptive cooldown 5→3→2s<br/>Severity: mild/moderate/severe</div>
+      </div>
+
+      <div class="detect-card" style="background:#0d1a15; border-color:#30d15830;">
+        <div class="dc-icon">📷</div>
+        <div class="dc-name" style="color:#30d158;">Webcam AI Detection</div>
+        <div class="dc-detail">TF.js COCO-SSD model<br/>No face · Multi-face<br/>Cell phone detection ≥0.55<br/>Prohibited objects ≥0.50<br/>2-of-3 frame buffer · 1400ms</div>
+      </div>
+
+      <div class="detect-card" style="background:#1a0d0d; border-color:#ff453a30;">
+        <div class="dc-icon">🔊</div>
+        <div class="dc-name" style="color:#ff453a;">Audio Monitoring</div>
+        <div class="dc-detail">Web Audio API<br/>Noise threshold detection<br/>Background speech alert<br/>Volume spike analysis<br/>Cooldown rate-limited</div>
+      </div>
+
+      <div class="detect-card" style="background:#0d1520; border-color:#0a84ff30;">
+        <div class="dc-icon">🔒</div>
+        <div class="dc-name" style="color:#0a84ff;">Browser Lockdown</div>
+        <div class="dc-detail">Tab/window switch<br/>Blocked: Ctrl+W/N/T/R/F5<br/>Mouse leave detection<br/>Extended absence 8s<br/>beforeunload / pagehide</div>
+      </div>
+
+      <div class="detect-card" style="background:#0d1520; border-color:#64d2ff30;">
+        <div class="dc-icon">🖥️</div>
+        <div class="dc-name" style="color:#64d2ff;">External Display</div>
+        <div class="dc-detail">screen.isExtended API<br/>Multi-monitor detection<br/>Fires on change event<br/>Rate-limited logging</div>
+      </div>
+
+      <div class="detect-card" style="background:#1a1a0d; border-color:#bf5af230;">
+        <div class="dc-icon">🛠️</div>
+        <div class="dc-name" style="color:#bf5af2;">DevTools Detection</div>
+        <div class="dc-detail">Window size delta<br/>Firebug detection<br/>Rate-limited 30s<br/>Logs DEVTOOLS_OPEN</div>
+      </div>
+
+      <div class="detect-card" style="background:#0d1a15; border-color:#5e5ce630;">
+        <div class="dc-icon">🌐</div>
+        <div class="dc-name" style="color:#5e5ce6;">Network Monitoring</div>
+        <div class="dc-detail">Navigator.onLine check<br/>Connection change events<br/>Logs NETWORK_CHANGE<br/>Bandwidth quality</div>
+      </div>
+
+      <div class="detect-card" style="background:#2a0d0d30; border-color:#ff453a50;">
+        <div class="dc-icon">📸</div>
+        <div class="dc-name" style="color:#ff453a;">Screenshot Capture</div>
+        <div class="dc-detail">Every violation triggers<br/>Uploadcare CDN upload<br/>Periodic every 90s<br/>Type-tagged: 10 enum types<br/>Stored in cheatingLog</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════ STATE MANAGEMENT ════════════════════════════════ -->
+  <div class="section-label col-full">Frontend State Management</div>
+
+  <div class="panel indigo" style="grid-column: 1 / 2;">
+    <div class="panel-title"><span class="dot"></span>Redux Toolkit Store</div>
+    <div class="chip-list">
+      <div class="chip chip-indigo"><span class="icon">🔐</span>authSlice (user, token)</div>
+      <div class="chip chip-indigo"><span class="icon">📋</span>examApiSlice (RTK Query)</div>
+      <div class="chip chip-indigo"><span class="icon">⚠️</span>cheatingLogApiSlice</div>
+      <div class="chip chip-indigo"><span class="icon">👤</span>userApiSlice</div>
+      <div class="chip chip-indigo"><span class="icon">📊</span>resultApiSlice</div>
+    </div>
+  </div>
+
+  <div class="panel orange" style="grid-column: 2 / 3;">
+    <div class="panel-title"><span class="dot"></span>CheatingLogContext (Exam-Scoped)</div>
+    <div class="chip-list">
+      <div class="chip chip-orange"><span class="icon">📷</span>screenshots[ ] — with type tags</div>
+      <div class="chip chip-orange"><span class="icon">👤</span>noFaceCount / multipleFaceCount</div>
+      <div class="chip chip-orange"><span class="icon">📱</span>cellPhoneCount / prohibitedCount</div>
+      <div class="chip chip-orange"><span class="icon">👁️</span>gazeViolationCount</div>
+      <div class="chip chip-orange"><span class="icon">🔊</span>audioViolationCount</div>
+      <div class="chip chip-orange"><span class="icon">🔒</span>tabSwitchCount / lockdownCount</div>
+      <div class="chip chip-orange"><span class="icon">🖥️</span>externalDisplayCount</div>
+      <div class="chip chip-orange"><span class="icon">💾</span>Auto-save every 30s</div>
+    </div>
+  </div>
+
+  <div class="panel gray" style="grid-column: 3 / 4;">
+    <div class="panel-title"><span class="dot"></span>Model Singleton</div>
+    <div class="chip-list">
+      <div class="chip chip-gray"><span class="icon">🧠</span>COCO-SSD (TF.js)</div>
+      <div class="chip chip-gray"><span class="icon">👁️</span>MediaPipe BlazeFace</div>
+      <div class="chip chip-gray"><span class="icon">⚡</span>Lazy load once</div>
+      <div class="chip chip-gray"><span class="icon">♻️</span>Shared across hooks</div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════ REAL-TIME ════════════════════════════════ -->
+  <div class="section-label col-full">Real-Time Communication</div>
+
+  <div class="panel red col-full" style="padding:14px 20px;">
+    <div class="panel-title"><span class="dot"></span>Socket.io — Live Proctoring Channel</div>
+    <div style="display:flex; gap:20px; flex-wrap:wrap;">
+      <div>
+        <div style="font-size:10px; color:#8e8ea0; margin-bottom:8px; letter-spacing:1px; text-transform:uppercase;">Student emits</div>
+        <div class="chip-list">
+          <div class="chip chip-red"><span class="icon">📡</span>exam:join (examId, studentId)</div>
+          <div class="chip chip-red"><span class="icon">⚠️</span>violation:detected (type, severity)</div>
+          <div class="chip chip-red"><span class="icon">💓</span>heartbeat (every 15s)</div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:10px; color:#8e8ea0; margin-bottom:8px; letter-spacing:1px; text-transform:uppercase;">Server broadcasts</div>
+        <div class="chip-list">
+          <div class="chip chip-red"><span class="icon">👥</span>active-students (list)</div>
+          <div class="chip chip-red"><span class="icon">🔴</span>recent-violations (stream)</div>
+          <div class="chip chip-red"><span class="icon">📊</span>proctoring-stats (counts)</div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:10px; color:#8e8ea0; margin-bottom:8px; letter-spacing:1px; text-transform:uppercase;">REST fallbacks</div>
+        <div class="chip-list">
+          <div class="chip chip-gray"><span class="icon">🔗</span>GET /exam/active-students</div>
+          <div class="chip chip-gray"><span class="icon">🔗</span>GET /exam/recent-violations</div>
+          <div class="chip chip-gray"><span class="icon">🔗</span>GET /exam/proctoring-stats</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════ BACKEND API ════════════════════════════════ -->
+  <div class="section-label col-full">Backend REST API — Express.js</div>
+
+  <!-- Exam Routes -->
+  <div class="panel blue" style="grid-column: 1 / 3;">
+    <div class="panel-title"><span class="dot"></span>Exam Routes · /api</div>
+    <div class="route-row"><span class="method get">GET</span><span class="route-path">/exam</span><span class="route-label">list exams (role-filtered)</span></div>
+    <div class="route-row"><span class="method post">POST</span><span class="route-path">/exam</span><span class="route-label">create exam</span></div>
+    <div class="route-row"><span class="method get">GET</span><span class="route-path">/exam/active-students</span><span class="route-label">live monitor ⭐</span></div>
+    <div class="route-row"><span class="method get">GET</span><span class="route-path">/exam/recent-violations</span><span class="route-label">live feed ⭐</span></div>
+    <div class="route-row"><span class="method get">GET</span><span class="route-path">/exam/proctoring-stats</span><span class="route-label">dashboard stats ⭐</span></div>
+    <div class="route-row"><span class="method put">PUT</span><span class="route-path">/exam/:examId</span><span class="route-label">update exam</span></div>
+    <div class="route-row"><span class="method post">POST</span><span class="route-path">/exam/:examId</span><span class="route-label">delete exam</span></div>
+    <div class="route-row"><span class="method post">POST</span><span class="route-path">/exam/:examId/duplicate</span><span class="route-label">duplicate exam</span></div>
+    <div class="route-row"><span class="method get">GET</span><span class="route-path">/exam/:examId/students</span><span class="route-label">eligible students</span></div>
+    <div class="route-row"><span class="method post">POST</span><span class="route-path">/exam/questions</span><span class="route-label">create question</span></div>
+    <div class="route-row"><span class="method get">GET</span><span class="route-path">/exam/questions/:examId</span><span class="route-label">get questions</span></div>
+    <div class="route-row"><span class="method post">POST</span><span class="route-path">/cheatingLogs/</span><span class="route-label">save violation log</span></div>
+    <div class="route-row"><span class="method get">GET</span><span class="route-path">/cheatingLogs/:examId</span><span class="route-label">get logs by exam</span></div>
+    <div class="route-row"><span class="method get">GET</span><span class="route-path">/allCheatingLogs</span><span class="route-label">all logs (teacher)</span></div>
+  </div>
+
+  <!-- User + Result Routes -->
+  <div style="grid-column: 3 / 4; display:flex; flex-direction:column; gap:16px;">
+    <div class="panel green">
+      <div class="panel-title"><span class="dot"></span>User Routes · /api</div>
+      <div class="route-row"><span class="method post">POST</span><span class="route-path">/users</span><span class="route-label">register</span></div>
+      <div class="route-row"><span class="method post">POST</span><span class="route-path">/users/auth</span><span class="route-label">login → JWT</span></div>
+      <div class="route-row"><span class="method post">POST</span><span class="route-path">/users/logout</span><span class="route-label">logout</span></div>
+      <div class="route-row"><span class="method get">GET</span><span class="route-path">/users/profile</span><span class="route-label">my profile</span></div>
+      <div class="route-row"><span class="method put">PUT</span><span class="route-path">/users/profile</span><span class="route-label">update profile</span></div>
+      <div class="route-row"><span class="method get">GET</span><span class="route-path">/users</span><span class="route-label">all users (teacher)</span></div>
+    </div>
+    <div class="panel cyan">
+      <div class="panel-title"><span class="dot"></span>Result Routes · /api</div>
+      <div class="route-row"><span class="method post">POST</span><span class="route-path">/result</span><span class="route-label">submit result</span></div>
+      <div class="route-row"><span class="method get">GET</span><span class="route-path">/result</span><span class="route-label">all results</span></div>
+      <div class="route-row"><span class="method get">GET</span><span class="route-path">/result/:id</span><span class="route-label">result by exam</span></div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════ DATABASE ════════════════════════════════ -->
+  <div class="section-label col-full">Database — MongoDB Atlas (Mongoose ODM)</div>
+
+  <div class="panel green col-full" style="padding:16px 20px;">
+    <div class="panel-title"><span class="dot"></span>Collections &amp; Key Schema Fields</div>
+    <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px;">
+
+      <div class="db-table">
+        <div class="db-table-name">👤 Users</div>
+        <div class="db-field">
+          <span>_id</span>, name, email<br/>
+          password (bcrypt)<br/>
+          role: student|teacher<br/>
+          pic (avatar URL)<br/>
+          createdAt, updatedAt
+        </div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-table-name">📋 Exams</div>
+        <div class="db-field">
+          <span>_id</span>, examName<br/>
+          subject, duration<br/>
+          totalMarks, passingMarks<br/>
+          negativeMarking<br/>
+          shuffleQuestions<br/>
+          startDate, endDate<br/>
+          eligibleStudents[ ]<br/>
+          showResults, active
+        </div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-table-name">❓ Questions</div>
+        <div class="db-field">
+          <span>_id</span>, examId (ref)<br/>
+          question (text)<br/>
+          options[ ] (4 choices)<br/>
+          correctAnswer (index)<br/>
+          marks, negativeMarks
+        </div>
+      </div>
+
+      <div class="db-table">
+        <div class="db-table-name">📊 Results</div>
+        <div class="db-field">
+          <span>_id</span>, student (ref)<br/>
+          exam (ref)<br/>
+          score, totalMarks<br/>
+          percentage, passed<br/>
+          answers[ ] (attempts)<br/>
+          timeTaken<br/>
+          showToStudent
+        </div>
+      </div>
+
+      <div class="db-table" style="grid-column: 1 / 3;">
+        <div class="db-table-name">⚠️ CheatingLogs</div>
+        <div class="db-field" style="display:grid; grid-template-columns: 1fr 1fr; gap:0 16px;">
+          <div>
+            <span>_id</span>, student (ref)<br/>
+            exam (ref)<br/>
+            noFaceCount, multipleFaceCount<br/>
+            cellPhoneCount, prohibitedObjectCount<br/>
+            gazeViolationCount
+          </div>
+          <div>
+            tabSwitchCount, lockdownCount<br/>
+            audioViolationCount<br/>
+            externalDisplayCount<br/>
+            screenshots[ ] { url, type, timestamp }<br/>
+            <span>type enum:</span> periodic|noFace|multipleFace|<br/>
+            cellPhone|prohibitedObject|gazeViolation|<br/>
+            tabSwitch|lockdown|audioViolation|externalDisplay
+          </div>
+        </div>
+      </div>
+
+      <div class="db-table" style="grid-column: 3 / 5;">
+        <div class="db-table-name">🔗 Relationships</div>
+        <div class="db-field">
+          Exam → eligibleStudents[ ] → User._id<br/>
+          Question → examId → Exam._id<br/>
+          Result → student → User._id, exam → Exam._id<br/>
+          CheatingLog → student → User._id, exam → Exam._id<br/>
+          <br/>
+          <span>Indexes:</span> CheatingLog (student + exam) unique compound<br/>
+          <span>Upsert:</span> saveCheatingLog uses findOneAndUpdate $max/$push
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════ EXTERNAL SERVICES ════════════════════════════════ -->
+  <div class="section-label col-full">External Services &amp; Infrastructure</div>
+
+  <div class="panel gray col-full" style="padding:14px 20px;">
+    <div class="panel-title"><span class="dot"></span>Third-Party Integrations</div>
+    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+      <div class="chip chip-orange"><span class="icon">📸</span>Uploadcare CDN — Screenshot Storage (publicKey: e69ab6e5db6d4a41760b)</div>
+      <div class="chip chip-blue"><span class="icon">🧠</span>TensorFlow.js — COCO-SSD Object Detection (client-side, no server)</div>
+      <div class="chip chip-purple"><span class="icon">👁️</span>MediaPipe — BlazeFace 6-keypoint (gaze + head yaw)</div>
+      <div class="chip chip-cyan"><span class="icon">🔌</span>Socket.io — WebSocket real-time channel</div>
+      <div class="chip chip-green"><span class="icon">🍃</span>MongoDB Atlas — Cloud NoSQL database</div>
+      <div class="chip chip-gray"><span class="icon">🔑</span>JWT (jsonwebtoken) — Stateless auth tokens</div>
+      <div class="chip chip-gray"><span class="icon">🔒</span>bcryptjs — Password hashing (salt rounds: 10)</div>
+      <div class="chip chip-indigo"><span class="icon">📦</span>Uploadcare Upload Client npm package</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#0a84ff;"></div>API / Data Flow</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#bf5af2;"></div>Teacher Only</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#64d2ff;"></div>Student Flow</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#ff9f0a;"></div>AI Detection</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#ff453a;"></div>Real-Time / Critical</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#30d158;"></div>Database</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#5e5ce6;"></div>State Management</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#8e8ea0;"></div>External Service</div>
+</div>
+
+<p style="text-align:center; margin-top:20px; font-size:11px; color:#3a3a55;">
+  AI Proctored Examination System · Updated Architecture · March 2026
+</p>
+
+</body>
+</html>

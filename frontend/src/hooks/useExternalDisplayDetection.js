@@ -1,209 +1,194 @@
 import { useEffect, useRef, useState } from 'react';
 
-
 /**
- * Custom hook to detect external/multiple displays during exams.
+ * Detects external / multiple displays (HDMI, USB-C, DisplayPort, wireless, Bluetooth).
  *
- * Detection strategies:
- * 1. screen.isExtended — synchronous, no permission needed (Chrome 100+)
- * 2. window.getScreenDetails() — needs user gesture, gives exact screen count
- * 3. Resolution heuristic — detects unusually wide screens (likely spanned/extended)
+ * Detection strategies (in order of accuracy):
+ *   1. window.getScreenDetails()  — exact screen list + labels (requires window-management permission)
+ *   2. window.screen.isExtended   — boolean, no permission needed (Chrome 100+)
+ *   3. Resolution heuristic       — ultra-wide aspect ratio fallback
+ *
+ * Connection-type inference from screen label:
+ *   Miracast / WFD / Wireless → "Wireless"
+ *   Bluetooth                 → "Bluetooth"
+ *   HDMI                      → "HDMI"
+ *   DisplayPort / DP          → "DisplayPort"
+ *   USB-C / Type-C / USB      → "USB-C"
+ *   VGA                       → "VGA"
+ *   Everything else           → "External"
  */
+
+const inferConnectionType = (label = '') => {
+  const l = label.toLowerCase();
+  if (/miracast|wfd|wireless|wifi|wi-fi/.test(l))  return 'Wireless';
+  if (/bluetooth|bt /.test(l))                     return 'Bluetooth';
+  if (/hdmi/.test(l))                              return 'HDMI';
+  if (/displayport|dp-/.test(l))                   return 'DisplayPort';
+  if (/usb-c|type-c|usbc|usb /.test(l))           return 'USB-C';
+  if (/thunderbolt|tb3|tb4/.test(l))               return 'Thunderbolt';
+  if (/vga/.test(l))                               return 'VGA';
+  if (/tv|television|chromecast|airplay/.test(l))  return 'Smart TV / Cast';
+  return 'External';
+};
+
 const useExternalDisplayDetection = ({
-  enabled = true,
-  onViolation = null,
+  enabled          = true,
+  onViolation      = null,
   detectionInterval = 5000,
 } = {}) => {
-  const [screenCount, setScreenCount] = useState(1);
+  const [screenCount,               setScreenCount]               = useState(1);
   const [isExternalDisplayDetected, setIsExternalDisplayDetected] = useState(false);
-  const [isSupported, setIsSupported] = useState(false);
+  const [isSupported,               setIsSupported]               = useState(false);
+  const [detectedScreens,           setDetectedScreens]           = useState([]);  // [{label,width,height,isPrimary,connectionType}]
+  const [detectionMethod,           setDetectionMethod]           = useState('');
 
-  // Use refs for callbacks and mutable state to avoid re-render dependency issues
-  const onViolationRef = useRef(onViolation);
-  const screenDetailsRef = useRef(null);
-  const lastViolationTimeRef = useRef(0);
+  const onViolationRef         = useRef(onViolation);
+  const lastViolationTimeRef   = useRef(0);
+  const permissionGrantedRef   = useRef(false);
+  const screenDetailsRef       = useRef(null);
 
-  const permissionGrantedRef = useRef(false);
-
-  // Cooldown matches detection interval so violation count increments each poll cycle
-  const VIOLATION_COOLDOWN_MS = detectionInterval;
-
-  // Keep callback ref up to date without causing effect re-runs
-  useEffect(() => {
-    onViolationRef.current = onViolation;
-  }, [onViolation]);
+  // Always keep callback ref current without re-running effects
+  useEffect(() => { onViolationRef.current = onViolation; }, [onViolation]);
 
   useEffect(() => {
     if (!enabled) return;
 
-    let intervalId = null;
-    let gestureCleanup = null;
-    let screensChangeCleanup = null;
+    const extendedSupported = typeof window.screen?.isExtended !== 'undefined';
+    const detailsSupported  = 'getScreenDetails' in window;
+    setIsSupported(extendedSupported || detailsSupported);
 
-    // --- Diagnostic logging on mount ---
-    const extendedValue = window.screen?.isExtended;
-    const extendedSupported = typeof extendedValue !== 'undefined';
-    const detailsSupported = 'getScreenDetails' in window;
+    let intervalId           = null;
+    let screensChangeSub     = null;
+    let gestureAdded         = false;
 
-    console.log('🖥️ [DisplayDetection] Initializing...', {
-      'screen.isExtended supported': extendedSupported,
-      'screen.isExtended value': extendedValue,
-      'getScreenDetails supported': detailsSupported,
-      'screen.width': window.screen?.width,
-      'screen.height': window.screen?.height,
-      'screen.availWidth': window.screen?.availWidth,
-      'window.devicePixelRatio': window.devicePixelRatio,
-    });
-
-    const supported = extendedSupported || detailsSupported;
-    setIsSupported(supported);
-
-    if (!supported) {
-      console.warn('🖥️ [DisplayDetection] No detection API available in this browser');
-    }
-
-    // --- Report a violation (rate-limited) ---
-    const reportViolation = (count, method) => {
+    // ── Rate-limited violation reporter ──────────────────────────────────────
+    const reportViolation = (count, screens, method) => {
       const now = Date.now();
-      if (now - lastViolationTimeRef.current < VIOLATION_COOLDOWN_MS) return;
+      if (now - lastViolationTimeRef.current < detectionInterval) return;
       lastViolationTimeRef.current = now;
-
-      console.warn(`🖥️ [DisplayDetection] VIOLATION — ${count} screen(s) via ${method}`);
-
       if (onViolationRef.current) {
         onViolationRef.current({
-          screenCount: count,
+          screenCount  : count,
+          screens,
           method,
-          timestamp: new Date().toISOString(),
+          timestamp    : new Date().toISOString(),
         });
       }
-
-      // Toast notification is handled by the onViolation callback in TestPage
     };
 
-    // --- Core check function ---
+    // ── Core detection ────────────────────────────────────────────────────────
     const performCheck = async () => {
-      let detected = false;
-      let count = 1;
-      let method = '';
+      let detected  = false;
+      let count     = 1;
+      let method    = '';
+      let screens   = [];
 
-      // Strategy 1: screen.isExtended
-      if (extendedSupported) {
-        const extended = window.screen.isExtended;
-        if (extended) {
-          detected = true;
-          count = 2;
-          method = 'screen.isExtended';
-        }
-      }
-
-      // Strategy 2: Call getScreenDetails() fresh each poll for accurate data
-      if (permissionGrantedRef.current && detailsSupported) {
+      // ① getScreenDetails — most accurate; gives labels → connection type
+      if (detailsSupported) {
         try {
-          const details = await window.getScreenDetails();
-          screenDetailsRef.current = details;
-          const screenList = details.screens;
-          if (screenList && screenList.length > 1) {
-            detected = true;
-            count = screenList.length;
-            method = 'getScreenDetails';
+          const sd = screenDetailsRef.current || (await window.getScreenDetails());
+          if (!screenDetailsRef.current) {
+            screenDetailsRef.current   = sd;
+            permissionGrantedRef.current = true;
+            // Live topology changes
+            const onChange = () => performCheck();
+            sd.addEventListener('screenschange', onChange);
+            screensChangeSub = () => sd.removeEventListener('screenschange', onChange);
           }
-        } catch (err) {
-          console.log('🖥️ [DisplayDetection] getScreenDetails poll error:', err.message);
-        }
+          const list = sd.screens || [];
+          if (list.length > 1) {
+            detected = true;
+            count    = list.length;
+            method   = 'getScreenDetails';
+            screens  = list.map(s => ({
+              label          : s.label || (s.isPrimary ? 'Primary Display' : 'External Display'),
+              width          : s.width,
+              height         : s.height,
+              isPrimary      : s.isPrimary,
+              isInternal     : s.isInternal ?? s.isPrimary,
+              connectionType : inferConnectionType(s.label || ''),
+            }));
+          }
+        } catch { /* permission denied or not available */ }
       }
 
-      // Strategy 3: Resolution heuristic
-      // If screen width is more than 2x the height, likely extended/spanned display
-      if (!detected && !extendedSupported) {
+      // ② screen.isExtended — synchronous, no permission required
+      if (!detected && extendedSupported && window.screen.isExtended) {
+        detected = true;
+        count    = 2;
+        method   = 'screen.isExtended';
+        screens  = [
+          { label: 'Primary Display',  isPrimary: true,  connectionType: 'Primary',  width: window.screen.width, height: window.screen.height },
+          { label: 'External Display', isPrimary: false, connectionType: 'External', width: 0, height: 0 },
+        ];
+      }
+
+      // ③ Resolution heuristic — ultra-wide likely means spanned/extended desktop
+      if (!detected && !extendedSupported && !detailsSupported) {
         const ratio = window.screen.width / window.screen.height;
         if (ratio > 2.8) {
           detected = true;
-          count = 2;
-          method = 'resolution-heuristic';
-          console.log(`🖥️ [DisplayDetection] Heuristic triggered — screen ratio: ${ratio.toFixed(2)}`);
+          count    = 2;
+          method   = 'resolution-heuristic';
+          screens  = [
+            { label: `Spanned Desktop (${window.screen.width}×${window.screen.height})`, isPrimary: false, connectionType: 'External', width: window.screen.width, height: window.screen.height },
+          ];
         }
       }
 
       setScreenCount(count);
       setIsExternalDisplayDetected(detected);
+      setDetectedScreens(detected ? screens : []);
+      setDetectionMethod(detected ? method : '');
 
-      if (detected) {
-        reportViolation(count, method);
-      }
+      if (detected) reportViolation(count, screens, method);
     };
 
-    // --- Request getScreenDetails on first user gesture ---
-    const requestPermissionOnGesture = async () => {
+    // ── Request getScreenDetails on first user interaction ────────────────────
+    const onGesture = async () => {
       if (permissionGrantedRef.current || !detailsSupported) return;
-
-      console.log('🖥️ [DisplayDetection] Requesting getScreenDetails permission...');
+      cleanupGesture();
       try {
-        const details = await window.getScreenDetails();
-        screenDetailsRef.current = details;
+        const sd = await window.getScreenDetails();
+        screenDetailsRef.current    = sd;
         permissionGrantedRef.current = true;
-
-        console.log('🖥️ [DisplayDetection] Permission granted!', {
-          screenCount: details.screens.length,
-          screens: details.screens.map((s) => ({
-            label: s.label,
-            width: s.width,
-            height: s.height,
-            isPrimary: s.isPrimary,
-          })),
-        });
-
-        // Listen for screen changes
-        const onChange = () => {
-          console.log('🖥️ [DisplayDetection] screenschange event fired');
-          performCheck();
-        };
-        details.addEventListener('screenschange', onChange);
-        screensChangeCleanup = () => details.removeEventListener('screenschange', onChange);
-
-        // Immediately re-check
+        const onChange = () => performCheck();
+        sd.addEventListener('screenschange', onChange);
+        screensChangeSub = () => sd.removeEventListener('screenschange', onChange);
         performCheck();
-      } catch (err) {
-        console.log('🖥️ [DisplayDetection] getScreenDetails permission denied:', err.message);
-      }
+      } catch { /* user denied */ }
     };
 
-    // Attach gesture listeners
-    const onGesture = () => {
-      requestPermissionOnGesture();
-      // Remove both listeners after first gesture
-      document.removeEventListener('click', onGesture);
+    const cleanupGesture = () => {
+      document.removeEventListener('click',   onGesture);
       document.removeEventListener('keydown', onGesture);
+      gestureAdded = false;
     };
 
     if (detailsSupported && !permissionGrantedRef.current) {
-      document.addEventListener('click', onGesture);
+      document.addEventListener('click',   onGesture);
       document.addEventListener('keydown', onGesture);
-      gestureCleanup = () => {
-        document.removeEventListener('click', onGesture);
-        document.removeEventListener('keydown', onGesture);
-      };
+      gestureAdded = true;
     }
 
-    // --- Start polling ---
-    performCheck(); // Initial check
+    // ── Start polling ─────────────────────────────────────────────────────────
+    performCheck();
     intervalId = setInterval(performCheck, detectionInterval);
 
-    console.log(`🖥️ [DisplayDetection] Polling started (every ${detectionInterval}ms)`);
-
-    // --- Cleanup ---
     return () => {
-      if (intervalId) clearInterval(intervalId);
-      if (gestureCleanup) gestureCleanup();
-      if (screensChangeCleanup) screensChangeCleanup();
-      console.log('🖥️ [DisplayDetection] Cleaned up');
+      clearInterval(intervalId);
+      if (gestureAdded) cleanupGesture();
+      if (screensChangeSub) screensChangeSub();
     };
-  }, [enabled, detectionInterval]); // Stable deps only — no callback deps
+  }, [enabled, detectionInterval]);
 
   return {
     screenCount,
     isExternalDisplayDetected,
     isSupported,
+    detectedScreens,
+    detectionMethod,
+    hasPermission: permissionGrantedRef.current,
   };
 };
 

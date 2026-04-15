@@ -4,22 +4,54 @@ const userSchema = mongoose.Schema(
   {
     name: {
       type: String,
-      require: true,
+      required: true,
     },
 
     email: {
       type: String,
-      require: true,
+      required: true,
       unique: true,
     },
 
     password: {
       type: String,
-      require: true,
+      required: true,
     },
     role: {
       type: String,
-      require: true,
+      required: true,
+      enum: ['student', 'teacher', 'admin'],
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    lastLogin: {
+      type: Date,
+    },
+    phone: {
+      type: String,
+      default: '',
+    },
+    institution: {
+      type: String,
+      default: '',
+    },
+    department: {
+      type: String,
+      default: '',
+    },
+    studentId: {
+      type: String,
+      default: '',
+    },
+    bio: {
+      type: String,
+      default: '',
+    },
+    profilePicture: {
+      type: String,
+      default: '',
     },
   },
   {
@@ -33,15 +65,15 @@ userSchema.methods.matchPassword = async function (enteredPassword) {
 };
 
 // Encrypt password using bcrypt
-userSchema.pre("save", async function (next) {
-  // if this user obj is not modified mode next
-  // else if user obj is create or modified like during update then hash password
-  if (!this.isModified("password")) {
-    next();
-  }
+userSchema.pre("save", async function () {
+  if (!this.isModified("password")) return;
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
 });
+
+// Indexes for performance (email unique index is already set via field definition)
+userSchema.index({ role: 1 });
+userSchema.index({ isActive: 1, role: 1 });
 
 const User = mongoose.model("User", userSchema);
 

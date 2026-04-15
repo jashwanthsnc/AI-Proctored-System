@@ -15,6 +15,7 @@ export const CheatingLogProvider = ({ children }) => {
     windowBlurViolations: 0,
     gazeViolationCount: 0,
     externalDisplayCount: 0,
+    audioViolationCount: 0,
     examId: '',
     username: userInfo?.name || '',
     email: userInfo?.email || '',
@@ -74,16 +75,14 @@ export const CheatingLogProvider = ({ children }) => {
         externalDisplayCount: newLog.externalDisplayCount !== undefined
           ? Number(newLog.externalDisplayCount)
           : Number(prev.externalDisplayCount || 0),
+        audioViolationCount: newLog.audioViolationCount !== undefined
+          ? Number(newLog.audioViolationCount)
+          : Number(prev.audioViolationCount || 0),
         // Preserve or update screenshots array
         screenshots: newLog.screenshots !== undefined
           ? newLog.screenshots
           : (prev.screenshots || []),
       };
-      console.log('📝 Context Update:', {
-        before: prev,
-        incoming: newLog,
-        after: updatedLog
-      });
       return updatedLog;
     });
   };
@@ -99,12 +98,12 @@ export const CheatingLogProvider = ({ children }) => {
       windowBlurViolations: 0,
       gazeViolationCount: 0,
       externalDisplayCount: 0,
+      audioViolationCount: 0,
       examId: examId,
       username: userInfo?.name || '',
       email: userInfo?.email || '',
       screenshots: [], // Reset screenshots array
     };
-    console.log('Reset cheating log:', resetLog); // Debug log
     setCheatingLog(resetLog);
     setSavedScreenshotUrls(new Set()); // Reset saved screenshot tracking
   };

@@ -1,0 +1,42 @@
+{
+  "name": "ate-prot-desktop",
+  "version": "1.0.0",
+  "description": "AI-Proctored Exam System — Secure Lockdown Browser",
+  "main": "main.js",
+  "scripts": {
+    "start": "node launch.js",
+    "build:win": "electron-builder --win --x64",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "electron-store": "^8.1.0"
+  },
+  "devDependencies": {
+    "electron": "^25.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.ateprot.lockdown",
+    "productName": "ATE-PROT Secure Exam",
+    "icon": "assets/icon.png",
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.education"
+    },
+    "linux": {
+      "target": "AppImage"
+    },
+    "extraResources": [],
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/icon.png"
+    }
+  }
+}

@@ -7,13 +7,13 @@ import {
   updateUserProfile,
   getAllStudents,
   addStudent,
+  deleteStudent,
+  getSystemStats,
 } from "../controllers/userController.js";
-import { protect, teacherOnly } from "../middleware/authMiddleware.js";
-import { createExam, getExams } from "../controllers/examController.js";
+import { protect, teacherOnly, adminOrTeacher } from "../middleware/authMiddleware.js";
 
 const userRoutes = express.Router();
 
-userRoutes.post("/", registerUser);
 userRoutes.post("/auth", authUser);
 userRoutes.post("/logout", logoutUser);
 userRoutes.post("/register", registerUser);
@@ -24,10 +24,15 @@ userRoutes
   .get(protect, getUserProfile)
   .put(protect, updateUserProfile);
 
-// Student management routes (teacher only)
+// System stats (teacher/admin)
+userRoutes.get("/stats", protect, adminOrTeacher, getSystemStats);
+
+// Student management routes (teacher/admin only)
 userRoutes
   .route("/students")
-  .get(protect, teacherOnly, getAllStudents)
-  .post(protect, teacherOnly, addStudent);
+  .get(protect, adminOrTeacher, getAllStudents)
+  .post(protect, adminOrTeacher, addStudent);
+
+userRoutes.delete("/students/:id", protect, adminOrTeacher, deleteStudent);
 
 export default userRoutes;

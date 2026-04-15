@@ -19,13 +19,26 @@ const submitCodingAnswer = asyncHandler(async (req, res) => {
     throw new Error("Question not found");
   }
 
-  // Update the question with the submitted answer
-  question.submittedAnswer = {
-    code,
-    language,
-    status: "pending", // Initial status
-    executionTime: 0, // Will be updated after execution
-  };
+  // Update existing submission for this user or push a new one
+  const existingIdx = question.submissions.findIndex(
+    (s) => s.userId.toString() === req.user._id.toString()
+  );
+  if (existingIdx >= 0) {
+    question.submissions[existingIdx].code = code;
+    question.submissions[existingIdx].language = language;
+    question.submissions[existingIdx].status = "pending";
+    question.submissions[existingIdx].executionTime = 0;
+    question.submissions[existingIdx].submittedAt = new Date();
+  } else {
+    question.submissions.push({
+      userId: req.user._id,
+      code,
+      language,
+      status: "pending",
+      executionTime: 0,
+      submittedAt: new Date(),
+    });
+  }
 
   // Save the updated question
   const updatedQuestion = await question.save();

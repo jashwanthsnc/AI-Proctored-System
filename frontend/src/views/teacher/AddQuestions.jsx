@@ -1,121 +1,90 @@
 import React, { useState } from 'react';
-import { Typography, Box, Button, IconButton } from '@mui/material';
-import { ArrowBack } from '@mui/icons-material';
+import { Typography, Box, IconButton } from '@mui/material';
+import { IconArrowLeft } from '@tabler/icons-react';
 import PageContainer from 'src/components/container/PageContainer';
-import DashboardCard from '../../components/shared/DashboardCard';
 import QuestionsList from './components/QuestionsList';
 import AddQuestionForm from './components/AddQuestionForm';
 import AddCodingQuestionForm from './components/AddCodingQuestionForm';
+
+const viewTitles = {
+  list: { title: 'Question Bank', sub: 'Manage MCQ and coding questions for your exams' },
+  'mcq-form': { title: 'Add MCQ Question', sub: 'Create a new multiple choice question' },
+  'mcq-edit': { title: 'Edit MCQ Question', sub: 'Update the question details' },
+  'coding-form': { title: 'Add Coding Question', sub: 'Create a new coding challenge' },
+  'coding-edit': { title: 'Edit Coding Question', sub: 'Update the coding challenge' },
+};
 
 const AddQuestions = () => {
   const [currentView, setCurrentView] = useState('list');
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [editingCodingQuestion, setEditingCodingQuestion] = useState(null);
-  
-  // Lift selectedExamId state to parent and persist in localStorage
-  const [selectedExamId, setSelectedExamId] = useState(() => {
-    const cached = localStorage.getItem('selectedExamId');
-    return cached || 'all';
-  });
 
-  // Update localStorage whenever selectedExamId changes
+  const [selectedExamId, setSelectedExamId] = useState(() => localStorage.getItem('selectedExamId') || 'all');
+
   const handleExamChange = (examId) => {
     setSelectedExamId(examId);
     localStorage.setItem('selectedExamId', examId);
   };
 
-  const handleBackToList = () => {
-    setCurrentView('list');
-    setEditingQuestion(null);
-    setEditingCodingQuestion(null);
-  };
+  const handleBackToList = () => { setCurrentView('list'); setEditingQuestion(null); setEditingCodingQuestion(null); };
+  const handleAddMCQ = () => { setEditingQuestion(null); setCurrentView('mcq-form'); };
+  const handleEditMCQ = (q) => { setEditingQuestion(q); setEditingCodingQuestion(null); setCurrentView('mcq-edit'); };
+  const handleAddCoding = () => { setEditingCodingQuestion(null); setCurrentView('coding-form'); };
+  const handleEditCoding = (q) => { setEditingCodingQuestion(q); setEditingQuestion(null); setCurrentView('coding-edit'); };
 
-  const handleAddMCQ = () => {
-    setEditingQuestion(null);
-    setCurrentView('mcq-form');
-  };
-
-  const handleEditMCQ = (question) => {
-    setEditingQuestion(question);
-    setEditingCodingQuestion(null);
-    setCurrentView('mcq-form');
-  };
-
-  const handleAddCoding = () => {
-    setEditingCodingQuestion(null);
-    setCurrentView('coding-form');
-  };
-
-  const handleEditCoding = (question) => {
-    setEditingCodingQuestion(question);
-    setEditingQuestion(null);
-    setCurrentView('coding-form');
-  };
+  const { title, sub } = viewTitles[currentView] || viewTitles.list;
 
   return (
-    <PageContainer title="Question Bank" description="Manage MCQ and Coding questions">
-      <DashboardCard 
-        title={
-          <Box display="flex" alignItems="center" gap={1}>
-            {currentView !== 'list' && (
-              <IconButton onClick={handleBackToList} size="small">
-                <ArrowBack />
-              </IconButton>
-            )}
-            {currentView === 'list' && 'Question Bank'}
-            {currentView === 'mcq-form' && (editingQuestion ? 'Edit MCQ Question' : 'Add MCQ Question')}
-            {currentView === 'coding-form' && (editingCodingQuestion ? 'Edit Coding Question' : 'Add Coding Question')}
+    <PageContainer title="Question Bank">
+      <Box sx={{ pb: 4 }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 4 }}>
+          {currentView !== 'list' && (
+            <IconButton
+              onClick={handleBackToList}
+              size="small"
+              sx={{ color: 'rgba(235,235,245,0.6)', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: '8px', '&:hover': { backgroundColor: 'rgba(255,255,255,0.1)' } }}
+            >
+              <IconArrowLeft size={18} />
+            </IconButton>
+          )}
+          <Box>
+            <Typography sx={{ fontWeight: 700, fontSize: '1.75rem', color: '#FFFFFF', letterSpacing: '-0.04em', fontFamily: 'Inter, sans-serif', lineHeight: 1 }}>
+              {title}
+            </Typography>
+            <Typography sx={{ fontSize: '0.9375rem', color: 'rgba(235,235,245,0.45)', mt: 0.75, letterSpacing: '-0.01em', fontFamily: 'Inter, sans-serif' }}>
+              {sub}
+            </Typography>
           </Box>
-        }
-      >
+        </Box>
+
         {currentView === 'list' && (
-          <>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              View and manage all your exam questions. Select an exam to see its questions or add new ones.
-            </Typography>
-            <QuestionsList 
-              onAddMCQ={handleAddMCQ} 
-              onAddCoding={handleAddCoding}
-              onEditMCQ={handleEditMCQ}
-              onEditCoding={handleEditCoding}
-              selectedExamId={selectedExamId}
-              onExamChange={handleExamChange}
-            />
-          </>
+          <QuestionsList
+            onAddMCQ={handleAddMCQ}
+            onAddCoding={handleAddCoding}
+            onEditMCQ={handleEditMCQ}
+            onEditCoding={handleEditCoding}
+            selectedExamId={selectedExamId}
+            onExamChange={handleExamChange}
+          />
         )}
 
-        {currentView === 'mcq-form' && (
-          <>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              {editingQuestion 
-                ? 'Edit the question details below. Changes will be saved immediately.'
-                : 'Create multiple choice questions for your exams. Questions are saved immediately when you click "Add Question".'
-              }
-            </Typography>
-            <AddQuestionForm 
-              onSuccess={handleBackToList}
-              editingQuestion={editingQuestion}
-              selectedExamId={selectedExamId}
-            />
-          </>
+        {(currentView === 'mcq-form' || currentView === 'mcq-edit') && (
+          <AddQuestionForm
+            onSuccess={handleBackToList}
+            editingQuestion={editingQuestion}
+            selectedExamId={selectedExamId}
+          />
         )}
 
-        {currentView === 'coding-form' && (
-          <>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              {editingCodingQuestion
-                ? 'Edit the coding question details below. Changes will be saved immediately.'
-                : 'Create coding challenges for your exams. Students will write and execute code to solve these problems.'
-              }
-            </Typography>
-            <AddCodingQuestionForm 
-              onSuccess={handleBackToList}
-              editingQuestion={editingCodingQuestion}
-              selectedExamId={selectedExamId}
-            />
-          </>
+        {(currentView === 'coding-form' || currentView === 'coding-edit') && (
+          <AddCodingQuestionForm
+            onSuccess={handleBackToList}
+            editingQuestion={editingCodingQuestion}
+            selectedExamId={selectedExamId}
+          />
         )}
-      </DashboardCard>
+      </Box>
     </PageContainer>
   );
 };

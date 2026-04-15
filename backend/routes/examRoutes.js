@@ -1,6 +1,6 @@
 import express from "express";
 
-import { protect, teacherOnly, checkExamEligibility } from "../middleware/authMiddleware.js";
+import { protect, teacherOnly, adminOrTeacher, checkExamEligibility } from "../middleware/authMiddleware.js";
 import {
   createExam,
   DeleteExamById,
@@ -9,6 +9,9 @@ import {
   assignStudentsToExam,
   getEligibleStudents,
   removeStudentsFromExam,
+  duplicateExam,
+  getExamById,
+  getExamStats,
 } from "../controllers/examController.js";
 import {
   createQuestion,
@@ -22,6 +25,8 @@ import {
   getActiveStudents,
   getRecentViolations,
   getProctoringStats,
+  getAllCheatingLogs,
+  exportCheatingLogsCSV,
 } from "../controllers/cheatingLogController.js";
 const examRoutes = express.Router();
 
@@ -32,11 +37,25 @@ examRoutes.route("/exam/questions/:examId").get(protect, checkExamEligibility, g
 examRoutes.route("/exam/question/:id")
   .put(protect, teacherOnly, updateQuestion)
   .delete(protect, teacherOnly, deleteQuestion);
-examRoutes.route("/cheatingLogs/:examId").get(protect, getCheatingLogsByExamId);
+// Static cheatingLogs routes BEFORE parameterized :examId route
+examRoutes.route("/cheatingLogs/export").get(protect, adminOrTeacher, exportCheatingLogsCSV);
 examRoutes.route("/cheatingLogs/").post(protect, saveCheatingLog);
+examRoutes.route("/cheatingLogs/:examId").get(protect, getCheatingLogsByExamId);
+// Live proctoring routes (static — must be BEFORE parameterized :examId routes)
+examRoutes.route("/exam/active-students").get(protect, teacherOnly, getActiveStudents);
+examRoutes.route("/exam/recent-violations").get(protect, teacherOnly, getRecentViolations);
+examRoutes.route("/exam/proctoring-stats").get(protect, teacherOnly, getProctoringStats);
+examRoutes.route("/exam/stats").get(protect, adminOrTeacher, getExamStats);
+
 examRoutes.route("/exam/:examId")
   .put(protect, teacherOnly, updateExam)
-  .post(protect, DeleteExamById);
+  .delete(protect, teacherOnly, DeleteExamById);
+
+// Get single exam details
+examRoutes.route("/exam/:examId/details").get(protect, getExamById);
+
+// Duplicate exam
+examRoutes.route("/exam/:examId/duplicate").post(protect, teacherOnly, duplicateExam);
 
 // Student assignment routes (teacher only)
 examRoutes
@@ -45,9 +64,7 @@ examRoutes
   .post(protect, teacherOnly, assignStudentsToExam)
   .delete(protect, teacherOnly, removeStudentsFromExam);
 
-// Live proctoring routes (teacher only)
-examRoutes.route("/exam/active-students").get(protect, teacherOnly, getActiveStudents);
-examRoutes.route("/exam/recent-violations").get(protect, teacherOnly, getRecentViolations);
-examRoutes.route("/exam/proctoring-stats").get(protect, teacherOnly, getProctoringStats);
+// Analytics
+examRoutes.route("/allCheatingLogs").get(protect, adminOrTeacher, getAllCheatingLogs);
 
 export default examRoutes;

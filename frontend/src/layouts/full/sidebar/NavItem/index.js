@@ -1,40 +1,40 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { NavLink } from 'react-router-dom';
-// mui imports
 import {
   ListItemIcon,
   ListItem,
   List,
   styled,
   ListItemText,
-  useTheme
+  useTheme,
 } from '@mui/material';
 
 const NavItem = ({ item, level, pathDirect, onClick }) => {
   const Icon = item.icon;
   const theme = useTheme();
-  const itemIcon = <Icon stroke={1.5} size="1.3rem" />;
+  const itemIcon = <Icon stroke={1.5} size="1.1rem" />;
 
   const ListItemStyled = styled(ListItem)(() => ({
     whiteSpace: 'nowrap',
-    marginBottom: '2px',
-    padding: '8px 10px',
-    borderRadius: '8px',
+    marginBottom: '1px',
+    padding: '7px 10px',
+    borderRadius: '12px',
     backgroundColor: level > 1 ? 'transparent !important' : 'inherit',
-    color:
-      theme.palette.text.secondary,
+    color: 'rgba(235,235,245,0.55)',
     paddingLeft: '10px',
+    cursor: 'pointer',
+    transition: 'background-color 0.15s ease, color 0.15s ease',
     '&:hover': {
-      backgroundColor: theme.palette.primary.light,
-      color: theme.palette.primary.main,
+      backgroundColor: 'rgba(255,255,255,0.06)',
+      color: 'rgba(235,235,245,0.9)',
     },
     '&.Mui-selected': {
-      color: 'white',
-      backgroundColor: theme.palette.primary.main,
+      color: '#FFFFFF',
+      backgroundColor: 'rgba(10,132,255,0.15)',
       '&:hover': {
-        backgroundColor: theme.palette.primary.main,
-        color: 'white',
+        backgroundColor: 'rgba(10,132,255,0.2)',
+        color: '#FFFFFF',
       },
     },
   }));
@@ -53,14 +53,21 @@ const NavItem = ({ item, level, pathDirect, onClick }) => {
       >
         <ListItemIcon
           sx={{
-            minWidth: '36px',
-            p: '3px 0',
+            minWidth: '34px',
+            p: '2px 0',
             color: 'inherit',
+            opacity: pathDirect === item.href ? 1 : 0.7,
           }}
         >
           {itemIcon}
         </ListItemIcon>
-        <ListItemText>
+        <ListItemText
+          primaryTypographyProps={{
+            fontSize: '0.875rem',
+            fontWeight: pathDirect === item.href ? 600 : 400,
+            letterSpacing: '-0.01em',
+          }}
+        >
           <>{item.title}</>
         </ListItemText>
       </ListItemStyled>

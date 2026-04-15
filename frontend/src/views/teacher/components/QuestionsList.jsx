@@ -109,6 +109,11 @@ const QuestionsList = ({ onAddMCQ, onAddCoding, onEditMCQ, onEditCoding, selecte
   const filteredMCQQuestions = selectedExamId === 'all' ? [] : mcqQuestions || [];
   const filteredCodingQuestions = selectedExamId === 'all' ? [] : codingQuestionsData?.data || [];
 
+  // Limit helpers
+  const selectedExam = examsData?.find((e) => e.examId === selectedExamId);
+  const mcqLimit = selectedExam?.totalQuestions ?? 0;
+  const atMcqLimit = selectedExamId !== 'all' && mcqLimit > 0 && filteredMCQQuestions.length >= mcqLimit;
+
   return (
     <Box>
       {/* Header with Exam Filter */}
@@ -123,7 +128,7 @@ const QuestionsList = ({ onAddMCQ, onAddCoding, onEditMCQ, onEditCoding, selecte
             <MenuItem value="all">All Exams</MenuItem>
             {examsData?.map((exam) => (
               <MenuItem key={exam.examId} value={exam.examId}>
-                {exam.examName} ({exam.totalQuestions} questions)
+                {exam.examName} (limit: {exam.totalQuestions})
               </MenuItem>
             ))}
           </Select>
@@ -136,7 +141,7 @@ const QuestionsList = ({ onAddMCQ, onAddCoding, onEditMCQ, onEditCoding, selecte
           <Tab
             icon={<Quiz />}
             iconPosition="start"
-            label={`MCQ Questions ${filteredMCQQuestions.length > 0 ? `(${filteredMCQQuestions.length})` : ''}`}
+            label={`MCQ Questions (${filteredMCQQuestions.length}${mcqLimit > 0 && selectedExamId !== 'all' ? ' / ' + mcqLimit : ''})`}
           />
           <Tab 
             icon={<Code />} 
@@ -154,11 +159,16 @@ const QuestionsList = ({ onAddMCQ, onAddCoding, onEditMCQ, onEditCoding, selecte
             variant="contained"
             startIcon={<Add />}
             onClick={onAddMCQ}
-            disabled={selectedExamId === 'all'}
+            disabled={selectedExamId === 'all' || atMcqLimit}
           >
             Add MCQ Question
           </Button>
         </Stack>
+        {atMcqLimit && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Question limit reached ({filteredMCQQuestions.length} / {mcqLimit}). Delete a question to add a new one.
+          </Alert>
+        )}
 
         {selectedExamId === 'all' ? (
           <Alert severity="info">Please select an exam to view and add questions</Alert>

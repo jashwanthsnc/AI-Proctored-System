@@ -12,17 +12,23 @@ const cheatingLogSchema = new mongoose.Schema(
     windowBlurViolations: { type: Number, default: 0 },
     gazeViolationCount: { type: Number, default: 0 },
     externalDisplayCount: { type: Number, default: 0 },
+    audioViolationCount: { type: Number, default: 0 },
 
     examId: { type: String, required: true },
     email: { type: String, required: true },
     username: { type: String, required: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 
     screenshots: [
       {
         url: { type: String, required: true },
         type: {
           type: String,
-          enum: ["noFace", "multipleFace", "cellPhone", "prohibitedObject"],
+          enum: [
+            "noFace", "multipleFace", "cellPhone", "prohibitedObject",
+            "periodic", "gazeViolation", "tabSwitch", "lockdown",
+            "audioViolation", "externalDisplay",
+          ],
           required: true,
         },
         detectedAt: { type: Date, default: Date.now },
@@ -34,7 +40,12 @@ const cheatingLogSchema = new mongoose.Schema(
   }
 );
 
-// Create a model using the schema
+// Indexes for performance
+cheatingLogSchema.index({ examId: 1, email: 1 }, { unique: true });
+cheatingLogSchema.index({ examId: 1 });
+cheatingLogSchema.index({ updatedAt: -1 });
+cheatingLogSchema.index({ email: 1 });
+
 const CheatingLog = mongoose.model("CheatingLog", cheatingLogSchema);
 
 export default CheatingLog;
